@@ -19,15 +19,19 @@ you ──▶ skills (*/SKILL.md) ───────────────�
 
 **→ https://olemurpho.github.io/wetnoodle/**
 
-A self-contained page that runs the real ranking maths in your browser over a synthetic 51-turn archive (a
-fictional robotics project — no real user data). Query embeddings were computed locally with
-`nomic-embed-text` and shipped with the page, so the cosine ranking you see is genuine, not a mock. Typed text
-falls back to BM25, because a browser has no embedding model.
+A working index of **5,677 PubMed abstracts** that you can search in the browser. Every hit is a real paper —
+title, journal, year, PMID — so any answer can be checked against its source instead of taken on trust.
 
-Passages containing the answer string are outlined in green, with the answer's rank shown above the results.
-Some questions put the answer below rank 1. That is deliberate: the page is there to make retrieval
-*checkable*, not to look impressive. The numbers in [Honest numbers](#honest-numbers) come from the same
-kind of measurement, on a real archive with a held-out question set.
+Two search paths are exposed, and the page says which is which:
+
+- **Typed queries** use BM25 (keyword) in JavaScript, because a browser has no embedding model.
+- **The twelve examples** run the real embedding search: their query vectors were computed locally by
+  `nomic-embed-text`, truncated to 256 dimensions and int8-quantised, so the cosine ranking you see is the
+  same maths the archive uses. The page states the rank of the abstract each example came from.
+
+That curation is disclosed on the page: of 46 titles sampled across the corpus, 30 retrieved their own
+abstract in the top three, and the examples are drawn from those 30. It is a demo of the mechanism, not a
+benchmark — [Honest numbers](#honest-numbers) is the benchmark, on a real archive with a held-out set.
 
 ## Why this shape
 
