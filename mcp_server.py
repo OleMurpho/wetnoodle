@@ -26,7 +26,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import rag_core as core
 import render
-from mcp.server.fastmcp import FastMCP
+try:  # mcp 1.x exposes FastMCP
+    from mcp.server.fastmcp import FastMCP
+except ImportError:  # mcp 2.x renamed it to MCPServer and kept the same tool/run API
+    from mcp.server.mcpserver import MCPServer as FastMCP
 
 mcp = FastMCP("wetnoodle")
 

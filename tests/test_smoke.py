@@ -252,5 +252,12 @@ class SmokeTest(unittest.TestCase):
             core.RAG_DB = old
             core._CACHE.clear()
 
+    def test_12_mcp_server_imports_on_the_installed_sdk(self):
+        """The MCP SDK renamed FastMCP to MCPServer in 2.x; a fresh install must still import."""
+        import mcp_server as m
+        self.assertTrue(hasattr(m, "rag_search"))
+        self.assertTrue(hasattr(m, "rag_open"))
+        self.assertTrue(hasattr(m, "rag_audit"))
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

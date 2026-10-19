@@ -1,5 +1,5 @@
 # wetnoodle needs very little: a vector math library and the MCP server SDK.
+# The MCP SDK renamed FastMCP to MCPServer in 2.x; mcp_server.py imports either.
 # Deliberately NOT chromadb/llama-index — that is a few hundred MB for a store that fits in sqlite.
-mcp==2.3.0
-mcp-types==2.3.0
+mcp>=1.9,<3
 numpy==2.4.3
