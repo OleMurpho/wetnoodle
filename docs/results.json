@@ -68,16 +68,20 @@
       "of": 27
     },
     {
-      "change": "Ranking 50 candidates instead of 20",
-      "effect": -1,
-      "unit": "questions (dev)",
-      "of": 27
-    },
-    {
       "change": "Keyword boosting across the whole corpus",
       "effect": -2,
       "unit": "questions recalled (10-q set)",
       "of": 10
+    }
+  ],
+  "abandoned": [
+    {
+      "change": "Ranking 50 candidates instead of 20",
+      "why": "~3x the cost per search; on a 6-core CPU it did not clear ten questions in 46 minutes"
+    },
+    {
+      "change": "A 4B embedding model instead of 0.6B",
+      "why": "~0.8 passages/s on a 4GB card, ~2.7 hours for one index; and the oracle showed recall was not the constraint"
     }
   ]
 }

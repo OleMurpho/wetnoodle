@@ -26,8 +26,9 @@ Two search paths are exposed, and the page says which is which:
 
 - **Typed queries** use BM25 (keyword) in JavaScript, because a browser has no embedding model.
 - **The twelve examples** run the real embedding search: their query vectors were computed locally by
-  `nomic-embed-text`, truncated to 256 dimensions and int8-quantised, so the cosine ranking you see is the
-  same maths the archive uses. The page states the rank of the abstract each example came from.
+  `nomic-embed-text`, truncated to 256 dimensions and int8-quantised. It is the same cosine maths the archive
+  uses, at lower precision and with no keyword rerank — the ranking you see is close to the archive's, not
+  identical. The page states the rank of the abstract each example came from.
 
 That curation is disclosed on the page: of 46 titles sampled across the corpus, 30 retrieved their own
 abstract in the top three, and the examples are drawn from those 30. It is a demo of the mechanism, not a
@@ -40,7 +41,8 @@ benchmark — [Does it actually find the right answer?](#does-it-actually-find-t
 - **Sessions *and* procedures.** Conversation history answers "what did we say"; skills answer "how do we do
   this here". Both are searched by the same tool.
 - **Small.** numpy + `sqlite3` + the MCP SDK. No Chroma, no LlamaIndex, no vector server. A 7,000-chunk
-  archive is ~40 MB and indexes in a couple of minutes on CPU.
+  archive is ~40 MB, and indexing it took about eleven minutes on a modest graphics card and about
+  twenty-five on the processor alone (12 passages/s vs 5).
 - **Nothing is thrown away.** A profile you delete keeps its corpus as *frozen* history rather than vanishing
   from the archive.
 - **Measurable.** `eval_recall.py` scores retrieval quality (see [Does it actually find the right answer?](#does-it-actually-find-the-right-answer)).
@@ -65,7 +67,8 @@ git clone https://github.com/OleMurpho/wetnoodle.git && cd wetnoodle
 ./.venv/bin/python query.py "the phrase you are looking for"
 ```
 
-`bootstrap.sh` is idempotent and needs no root. If it stops, `python doctor.py` names the exact fix.
+`bootstrap.sh` is idempotent, needs no root, and clears any inherited `PYTHONPATH` before doing anything — a
+foreign `PYTHONPATH` makes this venv import the wrong numpy. If it stops, `python doctor.py` names the exact fix.
 
 ## MCP registration
 
@@ -107,7 +110,7 @@ ingest only appends. In Hermes you can schedule the same script with the `cronjo
 | `python export_store.py --corpus X --out f.jsonl` | corpus → text (portable, diffable) |
 | `python import_store.py f.jsonl --corpus peer` | text → corpus (re-embedded locally) |
 | `python doctor.py` | preflight every dependency |
-| `python -m pytest tests/ -q` | smoke test, no Ollama needed |
+| `python -E -m unittest discover -s tests -q` | smoke test, no Ollama needed (`-E` ignores a stray `PYTHONPATH`) |
 
 ## Tuning
 
@@ -124,7 +127,9 @@ All optional, all environment variables:
 | `RAG_MAX_TOTAL_CHARS` | `6000` | cap across the whole result set |
 | `RAG_HYBRID` | `1` | keyword rerank inside vector candidates |
 | `RAG_VEC_WEIGHT` | `0.7` | vector share of the rerank blend |
-| `RAG_PER_CORPUS` | `0` | per-corpus slot quotas — **measured worse, off** (see below) |
+| `RAG_PER_CORPUS` | `0` | per-corpus slot quotas — **measured worse, off** (hit@8 19/27 → 18/27, no gain at rank 1) |
+| `RAG_PER_CORPUS_QUOTA` | `2` | slots per corpus when quotas are on |
+| `RAG_DOC_PREFIX` / `RAG_QUERY_PREFIX` | per model family | task prefixes; wrong ones measurably hurt — see `docs/models.md` |
 
 ## Does it actually find the right answer?
 
@@ -133,7 +138,8 @@ detail — a command, a hostname, a number — that appears in exactly one passa
 question that matters: when you search, does the passage holding that detail come back **first**?
 
 Nineteen of those questions were locked away while the system was built, and never used for any decision.
-Opening the envelope gives this:
+Every figure in this section is measured on a fixed 2,000-passage comparison set, so each change is compared
+like for like; the full archive behaves the same way (see the next section). Opening the envelope gives this:
 
 ![](docs/img/held-out.svg)
 
@@ -159,8 +165,12 @@ If you want the exact figures, the splits, and how each number was produced: [`d
 ## The optional upgrade, and why it is not the default
 
 **A second pass over the candidates** — a cross-encoder, about 570 MB, runs on the processor, no account
-needed. It lifts the held-out figure from 6 to 9 of 19. That is worth six points, but it costs one extra
-dependency and a second or two per search, so it stays an optional install rather than the default:
+needed. On our fixed 2,000-passage comparison set it lifted the held-out figure from 6 to 9 of 19.
+
+On the full 7,674-passage archive it did **worse than plain search on its own** (8 of 19 against 9), and only
+beat plain search when its score was blended half-and-half with the original (10 of 19). So the honest size of
+this upgrade on a real archive is about one extra question in nineteen — for one more dependency and a second
+or two per search. Optional, and not obviously worth it:
 
 ```bash
 pip install fastembed        # snippet in docs/models.md
@@ -175,7 +185,7 @@ to improve an answer should not be one `export` away from making it worse.
 
 ## Ideas that did not survive being measured
 
-Every one of these was built, run against the same questions, and dropped when it did not help:
+Every row here was built, run against the same questions, and dropped when it did not help:
 
 ![](docs/img/rejected.svg)
 
@@ -183,12 +193,19 @@ Every one of these was built, run against the same questions, and dropped when i
   title buried in a long passage — and it made things *worse*: seven fewer questions answered first. Boilerplate
   repeated across thousands of passages competes with the words that actually matter.
 - **The session's opening topic instead of a full context line.** Still three fewer.
-- **Reading fifty candidates instead of twenty.** One fewer, at roughly three times the cost per search.
-- **Blending the careful scorer's opinion with the original score.** Exactly nothing.
+- **A gate that forces rare identifier terms to match.** One fewer: the questions that need it are the ones
+  where the identifier is the *answer*, so it is not in the query to gate on.
+- **Removing all 1,570 duplicate passages** (20% of the archive). Exactly no change — duplicates were not
+  stealing rank, they were simply occupying slots nobody was fighting over.
 - **Keyword boosting across the whole corpus.** Two fewer questions found, because a word that appears
   everywhere outranks the words that appear once.
-- **A bigger embedding model (4B instead of 0.6B).** It raises a ceiling that was not the problem. The
-  answer was already in the twenty candidates most of the time; the missing piece was choosing between them.
+
+Two more were abandoned before they finished, so they carry no number:
+
+- **Ranking fifty candidates instead of twenty** cost about three times as much per search and had still not
+  cleared ten questions after forty-six minutes.
+- **A 4B embedding model instead of 0.6B** ran at 0.8 passages a second — nearly three hours for one index —
+  and the ceiling measurement says a bigger embedder raises a limit that was not the constraint.
 
 ## Known limits
 
@@ -198,8 +215,9 @@ Every one of these was built, run against the same questions, and dropped when i
   by what was said.
 - **One embedding model per store.** Switching models without `--full` is a dimension mismatch, which reads
   like corruption.
-- **No reranker model, no query expansion, no agentic retrieval.** All three are plausible next steps, none
-  are implemented.
+- **No reranker in the default path, no query expansion, no agentic retrieval.** All three are plausible next
+  steps; only the reranker exists, and it is optional because on a real archive it is worth roughly one extra
+  question in nineteen.
 - **Not multi-user.** It indexes the Hermes install it can see; there is no auth layer.
 
 ## Prior art

@@ -154,5 +154,14 @@ class SmokeTest(unittest.TestCase):
             core._CACHE.clear()
 
 
+    def test_6_corpus_filter_actually_scopes(self):
+        """corpus= used to be accepted and ignored, so a scoped search returned the whole archive."""
+        import rag_core as core
+        hits = core.search("widget repair", k=5, corpus="probe")
+        self.assertTrue(hits, "expected hits inside the corpus")
+        self.assertTrue(all(h.get("corpus") == "probe" for h in hits),
+                        f"corpus filter leaked: {[h.get('corpus') for h in hits]}")
+        self.assertEqual(core.search("widget repair", k=5, corpus="no-such-corpus"), [])
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

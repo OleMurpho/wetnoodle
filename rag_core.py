@@ -515,7 +515,16 @@ def search(query, k=8, corpus=None, hybrid=None):
             f"query dim {q.shape[0]} != index dim {mat.shape[1]} — rebuild with ingest.py --full"
         )
     scores = mat @ q                      # both sides L2-normalised => this is cosine
+    if corpus:
+        # Scope first, then rank. This used to be accepted and ignored — it only skipped the quota path —
+        # so a call that asked for one corpus silently returned the whole archive.
+        mask = np.fromiter((str(m.get("corpus")) == corpus for m in meta), dtype=bool, count=len(meta))
+        if not mask.any():
+            return []
+        scores = np.where(mask, scores, -np.inf)
     order = np.argsort(-scores)
+    if corpus:
+        order = order[np.isfinite(scores[order])]
 
     use_hybrid = HYBRID if hybrid is None else bool(hybrid)
     fused = None

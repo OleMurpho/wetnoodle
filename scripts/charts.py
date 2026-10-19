@@ -116,7 +116,7 @@ def rejected_svg(rows):
             out.append("<rect x='%.1f' y='%d' width='%.1f' height='18' rx='3' fill='%s'/>"
                        % (mid - bw, y + 6, max(bw, 2), colour))
             tx, anchor = mid - bw - 8, "end"
-        label = ("%+d questions" % v) if v else "no change"
+        label = ("%+d question%s" % (v, "" if abs(v) == 1 else "s")) if v else "no change"
         # never let the label start left of the label column
         if anchor == "end" and tx - 88 < label_w:
             tx, anchor = label_w + 6, "start"

@@ -2,6 +2,11 @@
 # bootstrap.sh — first run: venv, dependencies, Ollama, model, doctor, first ingest.
 # Does nothing that needs root. Re-runnable: every step is idempotent.
 set -uo pipefail
+
+# Isolation: an inherited PYTHONPATH from another interpreter (agent runtimes set one) makes this
+# venv import a foreign numpy and fail. Ignore all PYTHON* variables for everything below.
+unset PYTHONPATH PYTHONHOME PYTHONUSERBASE
+export PYTHONNOUSERSITE=1
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 
@@ -48,5 +53,5 @@ Try it:
 
 Then, to let your agent use it, register the MCP server (see README "MCP registration") and add the
 refresh job (see README "Keeping it current"). Run the tests first if you like:
-  ./.venv/bin/python -m pytest tests/ -q
+  ./.venv/bin/python -E -m unittest discover -s tests -q
 EOS

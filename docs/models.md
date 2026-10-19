@@ -72,10 +72,13 @@ bottleneck, not the embedder. A bigger embedder raises the ceiling; it does not 
 
 Two things that did **not** work here, both measured:
 
-- **Reranking 50 candidates instead of 20.** It costs ~3× per query and on a 6-core CPU it failed to clear ten
-  questions in 46 minutes. More candidates only help if the reranker can afford to read them.
-- **Blending the cross-encoder score with the retriever score** — included in the harness, no gain over the
-  cross-encoder alone.
+- **Reranking 50 candidates instead of 20.** Abandoned, not measured: ~3× the cost per query, and on a 6-core
+  CPU it had not cleared ten questions after 46 minutes. More candidates only help if the reranker can afford
+  to read them.
+- **The cross-encoder on the full archive.** On the 2,000-chunk set it gains 6→9/19; on the real 7,674-chunk
+  archive it *loses* to plain search alone (8/19 vs 9/19) and only wins when blended with the original score
+  (10/19 vs 9/19). Subset gains do not automatically transfer — this is the clearest example in the project,
+  and the reason the README quotes both.
 
 If you want to push further, spend it on a stronger reranker (fp32 `BAAI/bge-reranker-v2-m3` or
 `jinaai/jina-reranker-v2-base-multilingual`), not on a larger embedder.
@@ -138,7 +141,8 @@ archive, with the same 46 questions, the numbers are:
 | configuration | dev (27) | held out (19) | answer present in top-20 |
 |---|---|---|---|
 | plain search (this kit's default) | 13/27 (48%) | 9/19 (47%) | 16/19 (84%) |
-| + cross-encoder, blended (optional) | — | 10/19 (53%) | 16/19 (84%) |
+| + cross-encoder alone (optional) | — | 8/19 (42%) | 16/19 (84%) |
+| + cross-encoder blended with the retriever | — | 10/19 (53%) | 16/19 (84%) |
 
 The full archive scores slightly better than the subset because more context is available, and the plain-search
 gap between dev and held-out (48% vs 47%) is small — the two splits behave the same way, which is the sign that

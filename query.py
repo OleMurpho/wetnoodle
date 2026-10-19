@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 query.py — CLI retrieval over the RAG memory archive.
-  python query.py "what did we decide about battery chemistry" [-k 8] [--json]
+  python query.py "what did we decide about battery chemistry" [-k 8] [--corpus skill] [--json]
 """
 import argparse
 import json
@@ -12,12 +12,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("query")
     ap.add_argument("-k", type=int, default=8)
+    ap.add_argument("--corpus", default="", help="restrict to one corpus, e.g. 'skill'")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
     import rag_core as core
     try:
-        hits = core.search(args.query, k=args.k)
+        hits = core.search(args.query, k=args.k, corpus=args.corpus or None)
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -31,7 +32,10 @@ def main():
         print(json.dumps(hits, indent=1))
         return
     if not hits:
-        print("no hits — index empty? run ingest.py first")
+        if args.corpus:
+            print(f"no hits in corpus {args.corpus!r} — check `python ingest.py --status` for corpus names")
+        else:
+            print("no hits — index empty? run ingest.py first")
         return
 
     def header(i, h, body):
