@@ -49,22 +49,42 @@ def main():
 
     core.init_db()
     dim = core.get_dim() or 0
+    import sqlite3 as _sq
+    _con = _sq.connect(core.RAG_DB); existing_rows = _con.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]; _con.close()
+
+    # Work out the dimension this import will actually write, once, before writing anything.
+    if have_vectors and rows:
+        out_dim = len(base64.b64decode(rows[0]["vector_b64"])) // 4
+    elif rows:
+        out_dim = len(core.embed_documents([rows[0]["content"]])[0])
+    else:
+        out_dim = dim
+
+    # An export made with another embedding model is not interchangeable: different dimension, vectors never
+    # comparable to this store's. Refuse rather than write, because the old behaviour took each row's dim
+    # from the payload and rewrote the store's meta to match, leaving a store that looked healthy and
+    # returned nonsense.
+    if dim and existing_rows and out_dim and out_dim != dim:
+        print("refusing to import: these vectors are %d-dim but the store already holds %d-dim vectors "
+              "(export made with a different embedding model). Re-embed with ingest.py --full instead."
+              % (out_dim, dim))
+        return 2
+
     inserted = 0
     for start in range(0, len(rows), BATCH):
         batch = rows[start:start + BATCH]
         if have_vectors:
-            vecs = [list(base64.b64decode(r["vector_b64"])) for r in batch]
+            vecs = [base64.b64decode(r["vector_b64"]) for r in batch]   # raw float32 bytes, not ints
         else:
             import numpy as np
             vecs = [v.tobytes() for v in core.embed_documents([r["content"] for r in batch])]
         payload = []
         for r, v in zip(batch, vecs):
             emb = v if isinstance(v, (bytes, bytearray)) else bytes(v)
-            dim = len(emb) // 4
             payload.append((r.get("msg_start", 0), r.get("msg_end", 0), r.get("session_id", "import"),
                             r.get("role", "unknown"), r.get("ts", 0), r.get("source", a.jsonl),
                             r["content"], emb, corpus))
-        core.commit_ingest(payload, {}, dim or 0)
+        core.commit_ingest(payload, {}, out_dim or dim or 0)
         inserted += len(payload)
         print("  %d/%d" % (inserted, len(rows)))
     core._CACHE["mat"] = None; core._CACHE["key"] = None

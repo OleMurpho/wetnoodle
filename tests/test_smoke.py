@@ -218,5 +218,39 @@ class SmokeTest(unittest.TestCase):
         self.assertIsInstance(m.rag_search("x", pool=None), str)
         self.assertIn("whole number", m.rag_open(["c1"], max_chars="abc").lower())
 
+    def test_11_import_refuses_vectors_from_another_model(self):
+        """Importing an 8-dim export into a 64-dim store must refuse, not rewrite the store's meta."""
+        import base64
+        import struct
+        import import_store
+        db = os.path.join(self.tmp, "dim_probe.db")
+        old = core.RAG_DB
+        core.RAG_DB = db
+        try:
+            core.init_db()
+            v = _vec("caliper knob clockwise twice").astype(np.float32).tobytes()
+            core.commit_ingest([(1, 1, "s1", "user", 1700000000.0, "probe",
+                                 "caliper knob clockwise twice", v, "probe")], {}, DIM)
+            jl = os.path.join(self.tmp, "foreign.jsonl")
+            with open(jl, "w") as fh:
+                fh.write(json.dumps({
+                    "msg_start": 1, "msg_end": 1, "session_id": "peer", "role": "user", "ts": 1.0,
+                    "source": "peer", "content": "a caliper knob turns clockwise",
+                    "vector_b64": base64.b64encode(struct.pack("8f", *([0.35] * 8))).decode(),
+                }) + "\n")
+            before = sqlite3.connect(db).execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+            saved = sys.argv
+            sys.argv = ["import_store.py", jl, "--corpus", "foreign"]
+            try:
+                rc = import_store.main()
+            finally:
+                sys.argv = saved
+            self.assertEqual(rc, 2, "a dimension-mismatched import must be refused")
+            after = sqlite3.connect(db).execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+            self.assertEqual(before, after, "nothing may be written when the import is refused")
+        finally:
+            core.RAG_DB = old
+            core._CACHE.clear()
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

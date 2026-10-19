@@ -187,8 +187,7 @@ In plain terms: **raw ranking answers about one question in three**, which is wh
 the first hit. On the hardest questions — detail present in three passages or fewer — it puts the right
 one first **once in eight**, and inside the top three twice in eight. That is the stratum no amount of
 ranking polish fixes, and it is why the answer is meant to come from a model reading a pool, not from
-position one. That gap is
-the entire reason `rag_search` returns candidates instead of an answer.
+position one — which is the entire reason `rag_search` returns candidates instead of an answer.
 
 If you want the exact figures, the splits, and how each number was produced: [`docs/models.md`](docs/models.md).
 
