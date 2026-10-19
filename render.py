@@ -57,33 +57,46 @@ def note(shown: int, available: int) -> str:
 
 
 def snippet(text: str, query: str, width: int = 320) -> str:
-    """The part of a passage worth showing a judging model: the window where the query's own terms appear.
+    """The part of a passage worth showing a judging model: the window where the query's own terms cluster.
 
     Head-of-text truncation hides the evidence. A passage can answer the question in its last sentence, and
     the first 320 characters will show boilerplate — which reads as "irrelevant" to whatever is judging. So
     find the densest cluster of query terms and show that, marking the cut with ellipses.
 
-    This is the same trap that made a listwise judge look 11/27 instead of 13/27: snippets too short to
-    contain the fact being ranked on.
+    Every occurrence of every term is a candidate anchor, not just the first. Anchoring on first occurrences
+    was a real bug: a passage that says "rank" early for unrelated reasons and "rank guard inverted
+    relaxation" together at the end scored one term for the head window and lost the four-term cluster — the
+    exact failure this function exists to prevent. Windows are scored by how many *distinct* query terms they
+    contain, tie-broken by total occurrences, then by position.
+
+    Same trap that once made a listwise judge look 11/27 instead of 13/27: snippets too short, or misplaced,
+    to contain the fact being ranked on.
     """
     text = text or ""
     if len(text) <= width:
         return text
     low = text.lower()
     terms = sorted({t for t in __import__("re").findall(r"[a-z0-9]{3,}", (query or "").lower())})
-    starts = set()
-    for t in terms:
-        i = low.find(t)
-        if i >= 0:
-            starts.add(max(0, i - width // 3))
-    if not starts:
+    if not terms:
         return text[:width] + "…"
-    best, best_hits = 0, -1
-    for st in sorted(starts):
+
+    anchors = set()
+    for t in terms:
+        pos = low.find(t)
+        while pos >= 0:
+            anchors.add(max(0, min(pos - width // 4, max(0, len(text) - width))))
+            pos = low.find(t, pos + 1)
+    if not anchors:
+        return text[:width] + "…"
+
+    best, best_key = 0, (-1, -1)
+    for st in sorted(anchors):
         window = low[st:st + width]
-        hits = sum(1 for t in terms if t in window)
-        if hits > best_hits:
-            best, best_hits = st, hits
+        distinct = sum(1 for t in terms if t in window)
+        total = sum(window.count(t) for t in terms)
+        key = (distinct, total)
+        if key > best_key:
+            best, best_key = st, key
     head = "…" if best > 0 else ""
     tail = "…" if best + width < len(text) else ""
     return head + text[best:best + width] + tail

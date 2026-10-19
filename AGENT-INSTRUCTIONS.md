@@ -14,7 +14,7 @@ failure** — `doctor.py` names the fix, so do not improvise alternatives.
    has a `state.db`. A corpus tagged frozen means its source database was deleted; leave it.
 6. **Search once, for real.** `python query.py "<a phrase you know is in the history>"`. If it returns
    nothing, stop: the index is empty or the model is wrong, and every later step will lie to you.
-7. **Run the smoke test.** `python -m pytest tests/ -q`. It needs no Ollama and proves discover → chunk →
+7. **Run the smoke test.** `python -E -m unittest discover -s tests -q`. It needs no Ollama and proves discover → chunk →
    store → search → render → export/import. If it fails, the install is broken, not the archive.
 8. **Write eval questions before claiming quality.** Copy `eval/questions.example.json` to
    `eval/questions.local.json` and replace it with 8–10 questions about *this* archive, each with a marker you

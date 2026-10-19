@@ -19,6 +19,7 @@ Requires numpy + mcp in the same interpreter the MCP server runs on.
 """
 import json
 import os
+import sqlite3
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -49,11 +50,15 @@ def rag_search(query: str, pool: int = 12, corpus: str = "") -> str:
     answer lives, because a generic query lets the biggest corpora win.
     """
     try:
+        size = 12 if pool is None else int(pool)
         hits = core.search(
-            query, k=max(1, min(int(pool), 25)), corpus=(corpus or "").strip() or None
+            query, k=max(1, min(size, 25)), corpus=(corpus or "").strip() or None
         )
-    except ValueError as e:
-        return f"rag_search error: {e}"
+    except (ValueError, TypeError) as e:
+        return f"rag_search error: pool must be a whole number; got {pool!r} ({e})"
+    except sqlite3.Error as e:
+        return (f"rag_search unavailable: no index at {core.RAG_DB} ({e}). "
+                f"Run ingest.py first, or point RAG_DIR at a store that exists.")
     except RuntimeError as e:
         return f"rag_search unavailable: {e}"
     if not hits:
@@ -64,9 +69,16 @@ def rag_search(query: str, pool: int = 12, corpus: str = "") -> str:
              "You are the judge: pick the ones that answer it, then call rag_open(refs).", ""]
     for h in hits:
         body = render.snippet((h.get("content") or "").replace("\n", " ⏎ "), query, SNIPPET)
+        # When the keyword blend reorders, the cosine no longer matches the order. Show the value that
+        # produced the order, and the cosine too so a judge knows why a row sits where it does.
+        shown = h.get("fused")
+        if shown is None:
+            grade = f"score {h['score']:.3f}"
+        else:
+            grade = f"score {shown:.3f} (cosine {h['score']:.3f})"
         lines.append(
             f"[c{h['id']}] {core.fmt_date(h['ts'])} | {h.get('corpus', '?')} | {h['role']} | "
-            f"score {h['score']:.3f}\n    {body}"
+            f"{grade}\n    {body}"
         )
     return "\n".join(lines)
 
@@ -81,7 +93,14 @@ def rag_open(refs: list[str], max_chars: int = 0) -> str:
     deliberate deep read.
     """
     try:
+        budget = int(max_chars or 0)
+    except (ValueError, TypeError):
+        return f"rag_open error: max_chars must be a whole number; got {max_chars!r}"
+    try:
         hits, missing = core.get_chunks(refs)
+    except sqlite3.Error as e:
+        return (f"rag_open unavailable: no index at {core.RAG_DB} ({e}). Run ingest.py first, "
+                f"or point RAG_DIR at a store that exists.")
     except Exception as e:                      # noqa: BLE001 — a tool must not crash the server
         return f"rag_open error: {type(e).__name__}: {e}"
     if not hits:
@@ -95,7 +114,7 @@ def rag_open(refs: list[str], max_chars: int = 0) -> str:
         )
 
     blocks, shown, available, _ = render.bounded(
-        hits, header=header, total_chars=int(max_chars or 0)
+        hits, header=header, total_chars=budget
     )
     out = "\n\n".join(blocks)
     if missing:
@@ -108,7 +127,11 @@ def rag_audit() -> str:
     """Index health: total and per-corpus chunk counts, per-corpus coverage and freshness against each
     source database, sizes, schema version, and Ollama reachability. Corpora whose source db was deleted
     show as frozen."""
-    return json.dumps(core.audit(), indent=1)
+    try:
+        return json.dumps(core.audit(), indent=1)
+    except sqlite3.Error as e:
+        return (f'{{"error": "no index at {core.RAG_DB}: {e}", "hint": "run ingest.py, or point RAG_DIR '
+                f'at a store that exists"}}')
 
 
 if __name__ == "__main__":

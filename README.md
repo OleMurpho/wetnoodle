@@ -60,8 +60,9 @@ those 30. It is a demo of the mechanism, not a benchmark — [Does it actually f
 - **Sessions *and* procedures.** Conversation history answers "what did we say"; skills answer "how do we do
   this here". Both are searched by the same tool.
 - **Small.** numpy + `sqlite3` + the MCP SDK. No Chroma, no LlamaIndex, no vector server. A 7,000-chunk
-  archive is ~40 MB, and indexing it took about eleven minutes on a modest graphics card and about
-  twenty-five on the processor alone (12 passages/s vs 5).
+  archive is ~40 MB, and re-indexing it took about seven minutes on a modest four-year-old graphics card
+  (16 passages a second at roughly a thousand characters each). On the processor alone it is several times
+  slower.
 - **Nothing is thrown away.** A profile you delete keeps its corpus as *frozen* history rather than vanishing
   from the archive.
 - **Measurable.** `eval_recall.py` scores retrieval quality (see [Does it actually find the right answer?](#does-it-actually-find-the-right-answer)).
@@ -132,7 +133,7 @@ ingest only appends. In Hermes you can schedule the same script with the `cronjo
 | `python ingest.py --full` | rebuild available corpora from scratch |
 | `python ingest.py --purge-missing` | drop corpora whose source database is gone |
 | `python ingest_skills.py` | index every `SKILL.md` |
-| `python query.py "text" [--k N] [--corpus C]` | search from the shell |
+| `python query.py "text" [-k N] [--corpus C]` | search from the shell |
 | `python eval_recall.py` | retrieval gate: where each known answer comes back |
 | `python eval_recall.py --verify-markers` | is each eval marker actually present? |
 | `python export_store.py --corpus X --out f.jsonl` | corpus → text (portable, diffable) |
@@ -183,8 +184,10 @@ The twenty-seven questions used while building tell the same story at a differen
 ![](docs/img/dev.svg)
 
 In plain terms: **raw ranking answers about one question in three**, which is why nothing is meant to rely on
-the first hit. On the hardest questions — detail present in three passages or fewer — raw ranking gets 2 of 8
-while the right passage is in the pool 7 of 8. Those seven are recoverable by a model that reads. That gap is
+the first hit. On the hardest questions — detail present in three passages or fewer — it puts the right
+one first **once in eight**, and inside the top three twice in eight. That is the stratum no amount of
+ranking polish fixes, and it is why the answer is meant to come from a model reading a pool, not from
+position one. That gap is
 the entire reason `rag_search` returns candidates instead of an answer.
 
 If you want the exact figures, the splits, and how each number was produced: [`docs/models.md`](docs/models.md).

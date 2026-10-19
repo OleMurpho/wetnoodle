@@ -6,7 +6,7 @@ are replaced with a deterministic bag-of-words vector, and the full path is exer
 store -> search -> render -> export -> import -> search again. That proves the wiring, not the model's
 semantic quality — quality is what eval_recall.py measures against a real archive.
 
-    python -m pytest tests/ -q        # or:
+    python -E -m unittest discover -s tests -q   # or:
     python tests/test_smoke.py
 """
 import json
@@ -191,6 +191,32 @@ class SmokeTest(unittest.TestCase):
         drift = abs((datetime.datetime.now().replace(second=0, microsecond=0) - shown).total_seconds())
         self.assertLess(drift, 600, f"fmt_date drifts {drift/60:.0f} min from local time")
         self.assertEqual(core.fmt_date(0), "?")
+
+    def test_9_snippet_finds_the_cluster_not_the_first_term(self):
+        """Anchoring on first occurrences showed boilerplate and lost the cluster (agent review finding)."""
+        import render
+        text = ("rank " + "xxxx " * 40 + "guard " + "xxxx " * 40 + "inverted " + "xxxx " * 40
+                + "relaxation " + "xxxx " * 40 + "THE CLUSTER rank guard inverted relaxation together")
+        sn = render.snippet(text, "rank guard inverted relaxation", 200)
+        self.assertIn("CLUSTER", sn, f"snippet missed the four-term cluster: {sn[:80]!r}")
+        self.assertLessEqual(len(sn), 202)
+
+    def test_10_tool_errors_are_messages_not_tracebacks(self):
+        """A first-time user with no index must get guidance, not an OperationalError through MCP."""
+        import mcp_server as m
+        import rag_core as core
+        saved = core.RAG_DB
+        try:
+            core.RAG_DB = "/nonexistent-dir-xyz/rag.db"
+            search = m.rag_search("anything", pool=3)
+            self.assertIn("no index", search.lower())
+            self.assertIn("ingest", search.lower())
+            self.assertIn("error", m.rag_audit().lower())
+        finally:
+            core.RAG_DB = saved
+        # pool=None is tolerated (defaults to 12); it must not raise TypeError
+        self.assertIsInstance(m.rag_search("x", pool=None), str)
+        self.assertIn("whole number", m.rag_open(["c1"], max_chars="abc").lower())
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

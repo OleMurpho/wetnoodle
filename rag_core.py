@@ -35,6 +35,10 @@ import numpy as np
 HOME = os.path.expanduser("~")
 HERMES_HOME = os.environ.get("RAG_HERMES_HOME") or os.path.join(HOME, ".hermes")
 RAG_DIR = os.environ.get("RAG_DIR") or os.path.join(HOME, ".wetnoodle")
+# A single message longer than this is cut before chunking. Not silent any more: the cap is a
+# setting, because a truncated message is data loss and the person re-reading it deserves to know.
+MAX_MSG_CHARS = int(os.environ.get("RAG_MAX_MSG_CHARS", "20000"))
+
 RAG_DB = os.path.join(RAG_DIR, "rag.db")
 OLLAMA = os.environ.get("RAG_OLLAMA", "http://127.0.0.1:11434")
 MODEL = os.environ.get("RAG_EMBED_MODEL", "nomic-embed-text")  # pins vector dim: changing it needs --full
@@ -284,7 +288,7 @@ def source_messages(path, skip_through=0):
     try:
         cur = con.cursor()
         cur.execute(
-            "SELECT m.id, m.session_id, m.role, m.timestamp, substr(m.content,1,20000), s.source "
+            f"SELECT m.id, m.session_id, m.role, m.timestamp, substr(m.content,1,{MAX_MSG_CHARS}), s.source "
             "FROM messages m JOIN sessions s ON s.id = m.session_id "
             "WHERE m.role IN ('user','assistant') AND m.content IS NOT NULL "
             "AND length(trim(m.content)) > 0 AND m.id > ? ORDER BY m.id",

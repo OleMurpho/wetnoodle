@@ -5,7 +5,7 @@ re-embedding everything (`ingest.py --full`), and using the wrong query prefix c
 
 ## Measured on a real archive
 
-Setup: 2,000 chunks sampled from a 7,467-chunk Hermes archive (every answering chunk plus 1,955 random
+Setup: 2,000 chunks sampled from a 7,467-chunk Hermes archive (as it stood then; it has since grown past 7,674, which is why later tables use the larger figure) (every answering chunk plus 1,955 random
 distractors), 46 questions, 27 dev / 19 held out, identical chunks for both models, each model embedding its
 own queries with its own required prefix. "strict" = questions whose answer string appears in ≤3 chunks,
 i.e. precise factual recall rather than loose topical recall.
@@ -19,6 +19,10 @@ i.e. precise factual recall rather than loose topical recall.
 | test strict hit@3 | 2/8 (25%) | **5/8 (62%)** |
 | throughput on CPU (Ryzen 5 5500) | ~14 docs/s | ~5 docs/s |
 
+Measured on the machine this was built on: `nomic-embed-text` embeds **16 passages/s** at ~1,100
+characters each on a GTX 1050 Ti, i.e. about seven minutes for 7,000 passages. The CPU row above is from the
+same hardware with the card unavailable and is roughly three times slower.
+
 Both models are mediocre in absolute terms on this corpus: 37% hit@1 is not a good memory system. The gain
 that matters is on the strict stratum, where precise facts nearly stop being retrievable with nomic.
 
@@ -30,7 +34,7 @@ that matters is on the strict stratum, where precise facts nearly stop being ret
 | whitening (PCA scaling, p=0.5 and 1.0) | 9–10/27 | amplifies low-variance noise as fast as signal |
 | pseudo-relevance feedback (dense query expansion) | 12–13/27 | top-5 documents are often from the wrong topic and drag the query with them |
 | reciprocal rank fusion instead of a z-score blend | 11/27 | ties in the lexical channel turn RRF into array-order noise |
-| removing 1,547 exact-duplicate chunks | 12/27 vs 13/27 | duplicates of a *correct* chunk are free hits; dedup mostly removes those |
+| removing all 1,570 exact-duplicate chunks | 13/27 vs 13/27, no change | duplicates of a *correct* chunk are free hits; dedup mostly removes those. An earlier partial run (1,547 removed) showed 12/27, which is why the count and the delta in this row disagree with each other in older copies of this file |
 | message-level chunks (1 message = 1 unit) | 8/27 vs 13/27 | single conversational turns are too thin to match on |
 | per-corpus slot quotas | 0.453 vs 0.478 MRR | allocates slots to a corpus's highest-*scoring* chunks, not its answering chunk |
 
