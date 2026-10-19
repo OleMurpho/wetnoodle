@@ -94,9 +94,10 @@ scorings. On the same corpus, same splits, same top-20 pool:
 | oracle ceiling | 24/27 (89%) | 17/19 (89%) | — | — |
 
 Combined: **34/46 (74%)** against 23/46 (50%) for the cross-encoder and 16/46 (35%) for dense alone. The judge
-converts 15 of the 17 answerable questions, i.e. it is working at the ceiling the retriever supplies. Two
-unrelated judges (`deepseek-v4.1-flash`, `glm-5.3-flash`) both landed on 15/19; a 20B model managed 11/19, so
-judge quality matters and a small model is not a free substitute.
+converts 15 of the 17 answerable questions, i.e. it is working at the ceiling the retriever supplies. Three
+unrelated judges (`deepseek-v4.1-flash`, `glm-5.3-flash`, `kimi-k3`) all landed on 15/19 at MRR 0.819, a 68B
+reasoning model managed 13/19, and a 20B model 11/19 — so judge quality is a real variable and a small model is
+not a free substitute.
 
 Enable it with:
 
