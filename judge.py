@@ -34,7 +34,25 @@ baseline; it never breaks search and never invents results.
 import json
 import os
 import re
+import sys
 import urllib.request
+from urllib.parse import urlparse
+
+
+def _is_local(base):
+    """Is this endpoint on this machine? Anything else spends the owner's money when a stranger queries."""
+    host = (urlparse(base).hostname or "").lower()
+    return host in ("localhost", "::1", "") or host.startswith("127.") or host.endswith(".local") \
+        or host.endswith(".internal")
+
+
+_WARNED = set()
+
+
+def _warn_once(msg):
+    if msg not in _WARNED:
+        _WARNED.add(msg)
+        sys.stderr.write("[judge] %s\n" % msg)
 
 
 def config():
@@ -42,9 +60,17 @@ def config():
     if not model:
         return None
     default_base = (os.environ.get("RAG_OLLAMA") or "http://127.0.0.1:11434").rstrip("/") + "/v1"
+    base = (os.environ.get("RAG_JUDGE_BASE_URL") or default_base).rstrip("/")
+    # A hosted endpoint bills per call, and this function is reached by any search — including searches
+    # triggered by people who merely message an agent. So a non-local endpoint is refused unless the owner
+    # has said, explicitly and in writing, that they want that. Default-deny, not default-allow.
+    if not _is_local(base) and os.environ.get("RAG_JUDGE_ALLOW_REMOTE") != "1":
+        _warn_once("RAG_JUDGE_BASE_URL=%s is not local; refusing to call it. Set RAG_JUDGE_ALLOW_REMOTE=1 "
+                   "to accept that every search will be a billable request on that account." % base)
+        return None
     return {
         "model": model,
-        "base": (os.environ.get("RAG_JUDGE_BASE_URL") or default_base).rstrip("/"),
+        "base": base,
         "key": (os.environ.get("RAG_JUDGE_API_KEY") or "").strip(),
         "candidates": int(os.environ.get("RAG_JUDGE_CANDIDATES") or 20),
         "snippet": int(os.environ.get("RAG_JUDGE_SNIPPET") or 1200),

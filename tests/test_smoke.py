@@ -175,6 +175,16 @@ class SmokeTest(unittest.TestCase):
             os.environ["RAG_JUDGE_MODEL"] = "does-not-exist"
             os.environ["RAG_JUDGE_BASE_URL"] = "http://127.0.0.1:9/v1"
             self.assertEqual(judge.rerank("q", hits), hits, "judge outage must not lose results")
+
+            # a hosted endpoint must be refused unless the owner explicitly opts in: a search can be
+            # triggered by anyone who can message the bot, and every call would bill the account
+            os.environ["RAG_JUDGE_BASE_URL"] = "https://ollama.com/v1"
+            os.environ.pop("RAG_JUDGE_ALLOW_REMOTE", None)
+            self.assertFalse(judge.enabled(), "remote endpoint must be refused by default")
+            self.assertEqual(judge.rerank("q", hits), hits, "refused remote endpoint must not reorder")
+            os.environ["RAG_JUDGE_ALLOW_REMOTE"] = "1"
+            self.assertTrue(judge.enabled(), "explicit opt-in must enable a remote endpoint")
+            os.environ.pop("RAG_JUDGE_ALLOW_REMOTE", None)
         finally:
             for k, v in saved.items():
                 os.environ.pop(k, None)

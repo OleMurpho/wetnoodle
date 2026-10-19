@@ -146,10 +146,15 @@ correct rank 1. The cross-encoder converted about half of what it was given; the
 Enable it when you want it (off by default, no network call when unset):
 
 ```bash
-export RAG_JUDGE_MODEL=deepseek-v4.1-flash:cloud   # any OpenAI-compatible chat model, local or hosted
-export RAG_JUDGE_BASE_URL=https://ollama.com/v1    # default: the local Ollama's /v1
-export RAG_JUDGE_API_KEY=...                        # omit for a local daemon
+# local model on your own machine — no account, no per-query cost
+export RAG_JUDGE_MODEL=qwen3:4b
 ```
+
+**Cost exposure, stated plainly.** A judge runs on *every* search. If the endpoint is hosted, then every
+search — including searches triggered by anyone who can message an agent wired to this archive — becomes a
+billable request on that account. So a non-local `RAG_JUDGE_BASE_URL` is **refused** unless you also set
+`RAG_JUDGE_ALLOW_REMOTE=1`, and the refusal warns on stderr. Default is local-only; opting into remote billing
+is a deliberate act, not an accident of configuration.
 
 If the judge errors, times out, or answers unparseably, search returns the retriever's order unchanged. It can
 degrade to the dense baseline; it cannot break search or invent a result.

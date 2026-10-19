@@ -102,12 +102,15 @@ not a free substitute.
 Enable it with:
 
 ```bash
-export RAG_JUDGE_MODEL=deepseek-v4.1-flash:cloud   # any OpenAI-compatible chat model
-export RAG_JUDGE_BASE_URL=https://ollama.com/v1    # defaults to the local Ollama's /v1
-export RAG_JUDGE_API_KEY=...                        # omit for a local daemon
+export RAG_JUDGE_MODEL=qwen3:4b        # any OpenAI-compatible chat model
 ```
 
 Unset by default: with no `RAG_JUDGE_MODEL`, search is plain retrieval and no network call is made.
+
+**Hosted endpoints are refused by default.** The judge runs on every search, so a hosted base URL turns every
+search into a billable request — including those triggered by anyone who can message an agent using this
+archive. Setting a non-local `RAG_JUDGE_BASE_URL` without `RAG_JUDGE_ALLOW_REMOTE=1` disables the judge and
+warns on stderr. The measurements below used hosted models for evaluation only; the shipped default is local.
 
 ### Three ways this measurement was wrong before it was right
 
