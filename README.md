@@ -156,32 +156,22 @@ doubles it. This is an honest 5 out of 10, not a victory lap.
 
 If you want the exact figures, the splits, and how each number was produced: [`docs/models.md`](docs/models.md).
 
-## The two optional upgrades, and why they are not the default
+## The optional upgrade, and why it is not the default
 
-Both were built and measured. Neither ships switched on, for different reasons.
-
-**A careful re-read of the candidates** (a cross-encoder, ~570 MB, CPU, no account). It lifts the held-out
-figure from 6 to 9 of 19. It costs a second or two per search and one extra dependency, so it stays an
-optional install rather than the default:
+**A second pass over the candidates** — a cross-encoder, about 570 MB, runs on the processor, no account
+needed. It lifts the held-out figure from 6 to 9 of 19. That is worth six points, but it costs one extra
+dependency and a second or two per search, so it stays an optional install rather than the default:
 
 ```bash
-pip install fastembed        # then the snippet in docs/models.md
+pip install fastembed        # snippet in docs/models.md
 ```
 
-**A model reading all twenty candidates at once and picking the best.** This is the one that actually works
-well — 15 of 19 held out, and 7 of 8 on the hardest questions — but it needs a model with real reasoning
-ability. On a 4 GB graphics card the smallest capable model spills to the processor and takes forty seconds
-a *trivial* turn; a 1.7 B model that does fit scored *worse than plain search* (4 of 19 against 6). So it is
-in this repo as an optional, off-by-default, **local-only** module, and the honest advice is: leave it off
-unless you have a card that fits a 7 B model comfortably.
-
-```bash
-export RAG_JUDGE_MODEL=<a local model that fits>     # off by default; no network call when unset
-```
-
-A hosted model address is refused outright, with no override. The re-read happens on every search, and
-anyone who can message an agent using this archive can trigger a search — so a rented model would mean
-strangers spending your account. Local-only is a safety property here, not a preference.
+There was a third option: a language model reading all twenty candidates at once and picking the best. It
+scored 15 of 19 — by far the best result of anything we tried — but it needs a model with real reasoning
+ability, and this archive is built on a machine with a 4 GB card. The 4 B model would not fit and spilled to
+the processor at forty seconds a turn; a 1.7 B model that did fit scored **worse than plain search** (4 of 19
+against 6). The code is gone rather than shipped and switched off, because a feature that cannot be trusted
+to improve an answer should not be one `export` away from making it worse.
 
 ## Ideas that did not survive being measured
 

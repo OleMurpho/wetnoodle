@@ -154,46 +154,5 @@ class SmokeTest(unittest.TestCase):
             core._CACHE.clear()
 
 
-    def test_6_judge_parsing_and_fallbacks(self):
-        """The judge must be off by default, parse rankings honestly, and never break search."""
-        import judge
-
-        saved = {k: os.environ.pop(k, None) for k in ("RAG_JUDGE_MODEL", "RAG_JUDGE_BASE_URL")}
-        try:
-            self.assertFalse(judge.enabled(), "judge must be off unless RAG_JUDGE_MODEL is set")
-            hits = [{"content": "a"}, {"content": "b"}]
-            self.assertEqual(judge.rerank("q", hits), hits, "disabled judge must not reorder")
-
-            # list markers must not be read as candidate numbers
-            self.assertEqual(judge.parse_order("1) 7\n2) 3", 10), [])
-            self.assertEqual(judge.parse_order("ANSWER: [7, 3]", 10), [7, 3])
-            self.assertEqual(judge.parse_order('{"ok": true}\n[4, 1]', 10), [4, 1])
-            self.assertEqual(judge.parse_order("ANSWER: [11, 2]", 10), [2], "out-of-range numbers must drop")
-            self.assertEqual(judge.parse_order("ANSWER: [2, 2, 1]", 10), [2, 1], "duplicates must collapse")
-
-            # an unreachable endpoint degrades to the retriever's order rather than raising
-            os.environ["RAG_JUDGE_MODEL"] = "does-not-exist"
-            os.environ["RAG_JUDGE_BASE_URL"] = "http://127.0.0.1:9/v1"
-            self.assertEqual(judge.rerank("q", hits), hits, "judge outage must not lose results")
-
-            # a hosted endpoint is refused with NO override: a search can be triggered by anyone who can
-            # message the bot, so a paid endpoint would let a stranger spend the account's money
-            os.environ["RAG_JUDGE_BASE_URL"] = "https://ollama.com/v1"
-            self.assertFalse(judge.enabled(), "remote endpoint must be refused")
-            self.assertEqual(judge.rerank("q", hits), hits, "refused remote endpoint must not reorder")
-            os.environ["RAG_JUDGE_ALLOW_REMOTE"] = "1"          # must make no difference
-            self.assertFalse(judge.enabled(), "no flag may enable a paid endpoint")
-            os.environ.pop("RAG_JUDGE_ALLOW_REMOTE", None)
-            # local addresses are accepted
-            for local in ("http://127.0.0.1:11434/v1", "http://localhost:11434/v1"):
-                os.environ["RAG_JUDGE_BASE_URL"] = local
-                self.assertTrue(judge.enabled(), "local endpoint must be allowed: %s" % local)
-        finally:
-            for k, v in saved.items():
-                os.environ.pop(k, None)
-                if v is not None:
-                    os.environ[k] = v
-
-
 if __name__ == "__main__":
     unittest.main(verbosity=2)

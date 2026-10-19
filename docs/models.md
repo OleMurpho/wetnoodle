@@ -80,58 +80,55 @@ Two things that did **not** work here, both measured:
 If you want to push further, spend it on a stronger reranker (fp32 `BAAI/bge-reranker-v2-m3` or
 `jinaai/jina-reranker-v2-base-multilingual`), not on a larger embedder.
 
-## Listwise LLM reranking — the measured answer to "the reranker is the bottleneck"
+## Listwise LLM reranking — measured, then removed
 
-A cross-encoder scores each (query, document) pair in isolation. A listwise judge reads the query and all
-candidates in **one prompt** and ranks them against each other, so it costs one call per query instead of N
-scorings. On the same corpus, same splits, same top-20 pool:
+A cross-encoder scores each (query, document) pair in isolation. A **listwise judge** reads the query and all
+candidates in one prompt and ranks them against each other: one call per query instead of N scorings. On the
+same corpus, same splits, same top-20 pool:
 
-| | dev hit@1 | test hit@1 | test hit@3 | test strict hit@1 |
+| configuration | dev hit@1 | held-out hit@1 | held-out hit@3 | strict |
 |---|---|---|---|---|
 | retriever only (Qwen3-0.6B) | 11/27 (41%) | 6/19 (32%) | 12/19 (63%) | 2/8 (25%) |
 | + cross-encoder (bge-reranker-v2-m3-int8) | 14/27 (52%) | 9/19 (47%) | 15/19 (79%) | 4/8 (50%) |
-| + listwise judge | **19/27 (70%)** | **15/19 (79%)** | **16/19 (84%)** | **7/8 (88%)** |
+| + listwise judge (hosted model) | **19/27 (70%)** | **15/19 (79%)** | **16/19 (84%)** | **7/8 (88%)** |
 | oracle ceiling | 24/27 (89%) | 17/19 (89%) | — | — |
 
-Combined: **34/46 (74%)** against 23/46 (50%) for the cross-encoder and 16/46 (35%) for dense alone. The judge
-converts 15 of the 17 answerable questions, i.e. it is working at the ceiling the retriever supplies. Three
+Combined: **34/46 (74%)** against 23/46 (50%) for the cross-encoder and 16/46 (35%) for dense alone. It
+converts 15 of the 17 answerable questions, i.e. it works at the ceiling the retriever supplies. Three
 unrelated judges (`deepseek-v4.1-flash`, `glm-5.3-flash`, `kimi-k3`) all landed on 15/19 at MRR 0.819, a 68B
-reasoning model managed 13/19, and a 20B model 11/19 — so judge quality is a real variable and a small model is
-not a free substitute.
+reasoning model managed 13/19, and a 20B model 11/19.
 
-Enable it with:
+**The code is not in this repo, because it cannot run on the machine it was built on.**
 
-```bash
-export RAG_JUDGE_MODEL=qwen3:4b        # any OpenAI-compatible chat model
-```
+- The numbers above came from **hosted** models. A hosted endpoint is refused by design (below), so they are
+  not reproducible here.
+- `qwen3:1.7b` ran locally as the judge and scored **worse than no judge** — 6/19 → 4/19, MRR 0.482 → 0.307,
+  with parseable answers. That is a capability limit, not a parser bug: comparing twenty passages at once is
+  not a 2B-scale task.
+- `qwen3:4b` did not fit a 4 GB card. It ran at 18% GPU / 82% CPU and took **41 s for a trivial prompt**
+  (spending its budget on reasoning and returning empty content); real search prompts timed out.
 
-Unset by default: with no `RAG_JUDGE_MODEL`, search is plain retrieval and no network call is made.
+A feature that cannot be trusted to improve an answer should not sit one `export` away from making it worse,
+so it was deleted rather than shipped and switched off. The table stays because 74% is the honest ceiling a
+capable re-reader reaches on this archive — useful when deciding whether to spend on bigger hardware — and
+because the traps below cost real time to find.
 
-**Hosted endpoints are refused, with no override.** The judge runs on every search, so a hosted base URL turns
-every search into a billable request — including searches triggered by anyone who can message an agent using
-this archive. A non-local `RAG_JUDGE_BASE_URL` disables the judge and warns on stderr; no flag enables it.
-The measurements below used hosted models for the comparison only; the shipped default is local.
+**Why a hosted endpoint was refused while the code existed.** The judge ran on every search, so a rented
+endpoint turns each query into a billable request — including queries triggered by anyone who can message an
+agent holding the archive. That is someone else spending your account, and a warning does not prevent it.
 
-**Small local models do not do this job.** `qwen3:1.7b` as the judge scored *worse than no judge at all* —
-6/19 → 4/19 on the held-out set, with parseable answers, so it is a capability limit rather than a parser
-bug. Listwise comparison of twenty passages is not a 2B-scale task; budget for the largest model that fits.
+### Three ways this measurement lied before it stopped lying
 
-### Three ways this measurement was wrong before it was right
-
-All three produced plausible-looking numbers and would have led to the wrong conclusion. They are the reason
-the table above is trustworthy:
+All three produced plausible-looking numbers and would have led to the wrong conclusion:
 
 - **Snippets truncated to 420 chars.** Answering chunks average ~1,044 chars, so the judge often could not see
-  the fact it was being asked to rank. 11/27 → 13/27 just from showing it the whole chunk.
+  the fact it was asked to rank. 11/27 → 13/27 just from showing the whole chunk.
 - **Reading every integer in the reply.** A judge answering `1) 7  2) 3` was scored as ranking 1 then 2 — the
-  opposite of what it said, because list markers are digits too. This inflated one model to 14/19; with an
-  honest parser the same runs score 12/19. The prompt now demands a final `ANSWER: [...]` line.
-- **A 700-token output cap.** Reasoning models spend that on thinking and return *empty* content with
+  opposite of what it said, because list markers are digits too. This inflated one model to a fake 14/19; with
+  an honest parser the same runs scored 12/19. Demand a final `ANSWER: [...]` line and parse nothing else.
+- **A 700-token output cap.** Reasoning models spend it on thinking and return *empty* content with
   `finish_reason=length`, which silently falls back to the retriever's order. One judge looked like 7/19 when
-  the cap was the fault; with 2,500 tokens it scored 13/19.
-
-Failure policy in `judge.py`: any error, timeout, or unparseable reply returns the retriever's order unchanged.
-A judge outage degrades recall to the dense baseline; it never breaks search and never invents a result.
+  the cap was at fault; at 2,500 tokens it scored 13/19.
 
 ## What you actually get on a full archive
 
@@ -142,10 +139,6 @@ archive, with the same 46 questions, the numbers are:
 |---|---|---|---|
 | plain search (this kit's default) | 13/27 (48%) | 9/19 (47%) | 16/19 (84%) |
 | + cross-encoder, blended (optional) | — | 10/19 (53%) | 16/19 (84%) |
-| + listwise judge (optional, needs a capable local model) | — | 15/19 (79%)* | 17/19 (89%)* |
-
-\* measured on the 2,000-chunk set with a hosted model, before the local-only rule. Kept for reference: it is
-the ceiling a capable re-reader reaches, not something this kit will spend for you.
 
 The full archive scores slightly better than the subset because more context is available, and the plain-search
 gap between dev and held-out (48% vs 47%) is small — the two splits behave the same way, which is the sign that
@@ -155,7 +148,6 @@ the number is real rather than tuned.
 second or two per search for six points on the held-out set. Reasonable if you want it; not reasonable to force
 on everyone.
 
-**Why the judge is not the default either.** Measured on this machine: `qwen3:4b` would not fit a 4 GB card
-(18% GPU / 82% CPU, 41 s for a trivial prompt), and `qwen3:1.7b`, which did fit, scored **worse than plain
-search** (4/19 against 6/19) — listwise comparison of twenty passages is not a small-model task. It stays in
-the repo, off, for machines that can run a 7B model comfortably.
+**The listwise judge was removed.** It reached 79% with a hosted model, but a 1.7B local model scored worse
+than plain search and a 4B model would not fit this machine's 4 GB card. See the section above; the numbers
+are kept, the code is not.

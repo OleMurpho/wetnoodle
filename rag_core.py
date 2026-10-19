@@ -540,11 +540,6 @@ def search(query, k=8, corpus=None, hybrid=None):
 
     # Selection: either plain top-k, or quota-first then fill. Either way the returned order is
     # relevance order, so a caller never sees the selection mechanism.
-    # With a judge enabled the pool is widened first: a reranker can only reorder what it is given, so
-    # selecting k before reranking would throw away the candidates it exists to promote.
-    import judge as _judge
-    jcfg = _judge.config()
-    pool_k = max(k, jcfg["candidates"]) if jcfg else k
     if corpus or not PER_CORPUS:
         chosen = [(int(i), 1) for i in order]
     else:
@@ -568,10 +563,8 @@ def search(query, k=8, corpus=None, hybrid=None):
         if fused is not None:
             m["fused"] = round(float(fused[i]), 5)
         out.append(m)
-        if len(out) >= pool_k:
+        if len(out) >= k:
             break
-    if jcfg:
-        return _judge.rerank(query, out, k)
     return out
 
 
