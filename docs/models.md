@@ -170,3 +170,13 @@ higher than the original measurement for reasons that have nothing to do with re
 Two defences, both cheap: freeze the corpus you measure against (a copy of the store, not the live one), and
 never debug the eval text in the archive you will measure. If a number improves after the eval set has been
 discussed, suspect the corpus before believing the improvement.
+
+## The demo corpus, measured
+
+The browser demo indexes 5,677 PubMed abstracts. Taking 59 real titles from that corpus and keeping the 46
+long enough to be a fair query, **30 of the 46 retrieved their own abstract in the top three**; the worst
+title in the sample landed at rank 5,471 of 5,677.
+
+That number is why the demo's question sets are hand-picked and labelled as curation. Clean, single-topic
+prose is the easy case: it flatters a retrieval system. A conversation archive is the hard case, and that is
+where the honest figure is six of nineteen at first position.

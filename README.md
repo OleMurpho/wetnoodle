@@ -104,11 +104,20 @@ returns candidates instead of an answer. Exact figures and method: [`docs/models
 **→ https://olemurpho.github.io/wetnoodle/** — a real index of **5,677 PubMed abstracts**, searchable in the
 browser, every hit a real paper with title, journal, year and PMID.
 
-A browser has no embedding model, so the page is explicit about which path you are on: **typed queries are
-keyword-only (BM25)**, while **the twelve examples replay real embedding vectors** computed locally with
-`nomic-embed-text`, truncated to 256 dimensions and int8-quantised. Of 59 titles drawn, 46 were long enough to
-be fair queries and 30 of those retrieved their own abstract in the top three; the examples come from those
-30. It is a demonstration of the mechanism, not a benchmark.
+A browser cannot run an embedding model, and the page says so: **typed queries are keyword-only (BM25)**.
+The two sections below the search box replay the embedding search this project actually ships, precomputed
+locally with `nomic-embed-text` and quantised to 256 dimensions:
+
+- **You are the judge.** Three questions where the source abstract *is* in the eight candidates returned, but
+  is not first — it ranks **3rd, 4th and 7th** of 5,677. You pick; the page shows where the source really sat.
+  That is the choice the tool hands to a model instead of making itself.
+- **Where it fails.** Three questions where the source is **not in the top five at all** — it sits at **12th,
+  30th and 100th**. Nothing is hidden; the page shows the miss and then reveals the abstract it wanted.
+
+Six questions, each written by hand against an abstract chosen in advance. That is curation, and it means
+these are illustrations of the two regimes — pool-or-nothing — not a score. The score is
+[**six of nineteen**](#what-it-actually-finds) on a held-out set, with the answer inside the top twenty
+seventeen times.
 
 ## Commands
 
