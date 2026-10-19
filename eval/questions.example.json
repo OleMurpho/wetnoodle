@@ -1,0 +1,25 @@
+{
+ "note": "Copy to eval/questions.local.json (gitignored) and replace these with questions about YOUR archive. A marker must be a string that appears only in the chunk that answers the question - run `python eval_recall.py --verify-markers` to prove each one is present before trusting the score. The shipped markers are deliberately generic so they work on almost any Hermes archive.",
+ "questions": [
+  {
+   "id": "assistant-name",
+   "question": "What does the assistant call itself?",
+   "marker": "I am"
+  },
+  {
+   "id": "user-name",
+   "question": "What is the user's name?",
+   "marker": "Ole"
+  },
+  {
+   "id": "first-task",
+   "question": "What was the first thing the user asked for help with?",
+   "marker": "help"
+  },
+  {
+   "id": "model-used",
+   "question": "Which model was used for an earlier conversation?",
+   "marker": "model"
+  }
+ ]
+}

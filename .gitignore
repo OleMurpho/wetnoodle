@@ -1,0 +1,15 @@
+# the store is data, never source
+*.db
+*.db-wal
+*.db-shm
+imports/
+*.jsonl
+
+# your own eval set is machine-specific; the example is tracked
+eval/questions.local.json
+
+# runtimes
+.venv/
+__pycache__/
+*.pyc
+.env
