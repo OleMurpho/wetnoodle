@@ -48,3 +48,22 @@ representation problem, and no knob in this repo fixes it.
 Two things that look like improvements and are not, both measured: prepending a context line to each passage
 (**−7 questions**), and reranking a larger candidate pool (**−1 at 3× the cost**). Details and the rest of the
 graveyard: `docs/models.md`.
+
+## The one rule: you are the judge
+
+`rag_search` hands you candidates. It does not hand you an answer, and its order is not a recommendation.
+The measured reason: the right passage is in the pool about 84% of the time but first only about a third.
+
+1. Call `rag_search`. Read every candidate. You get a ref (`c1234`), a date, a corpus, and the window of the
+   passage where your query's words appear — not the head of it.
+2. Decide which ones actually answer the question. Two or three is normal. None is a valid answer.
+3. Call `rag_open` with those refs to read them in full before quoting.
+4. Answer from what you opened. If nothing answers, say so and, if useful, search again with different words
+   or a narrower `corpus`.
+
+Do not answer from a snippet when the detail matters — snippets are cut to 320 characters around your query
+terms, and the number or name you need may sit just outside. Do not assume the top hit is the best hit; on
+this archive the correct passage was first for only about one question in three.
+
+If you can name where the answer lives, pass `corpus`: a generic query lets the biggest corpora win, and on a
+multi-profile archive the biggest corpus is usually the noisiest.

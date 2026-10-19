@@ -163,5 +163,23 @@ class SmokeTest(unittest.TestCase):
                         f"corpus filter leaked: {[h.get('corpus') for h in hits]}")
         self.assertEqual(core.search("widget repair", k=5, corpus="no-such-corpus"), [])
 
+    def test_7_judging_loop_snippet_and_open(self):
+        """The window, the refs, and the failure path the agent depends on."""
+        import render
+        import rag_core as core
+        text = "boilerplate " * 40 + "the RANK GUARD rejects inverted relaxation " + "tail " * 40
+        sn = render.snippet(text, "what guards against inverted relaxation", 200)
+        self.assertIn("RANK GUARD", sn, "snippet must show the matching window, not the head")
+        self.assertLessEqual(len(sn), 202)
+        self.assertEqual(render.snippet("short", "anything", 200), "short")
+        hits = core.search("widget repair", k=3)
+        self.assertTrue(hits)
+        opened, missing = core.get_chunks(["c%d" % hits[0]["id"]])
+        self.assertEqual(len(opened), 1)
+        self.assertEqual(opened[0]["content"], hits[0]["content"])
+        self.assertEqual(missing, [])
+        _, missing = core.get_chunks(["c999999999"])
+        self.assertEqual(missing, [999999999])
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

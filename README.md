@@ -15,6 +15,25 @@ you ──▶ skills (*/SKILL.md) ───────────────�
                                              agent (MCP tool) / query.py ◀── search ───┘
 ```
 
+## How a search actually works
+
+**The model that retrieves is the model that judges.** There is no reranker and no judge endpoint anywhere in
+this design — not local, not cloud.
+
+1. `rag_search` returns a **pool of candidates**: a dozen passages, each with a ref, a date, a corpus and the
+   part of the passage where your query's own words appear.
+2. The agent reads them and calls `rag_open` on the ones that actually answer the question.
+3. The agent answers from those passages, or says it could not find it.
+
+Passage-finding is left to vectors, which are good at proposing a neighbourhood. Choosing between near-misses
+is left to the model that asked — the one already loaded, already holding the conversation, and already paid
+for. That model can compare a question against twenty passages; a reranker compares each passage against the
+question alone, and a separate judge model would add an endpoint, a bill, and a copy of your conversation
+leaving the machine.
+
+The practical consequence: **answer quality depends on the model you point at it.** A strong model reads the
+pool and picks well. A weak one takes the first hit. The system tells it not to.
+
 ## Try it without installing anything
 
 **→ https://olemurpho.github.io/wetnoodle/**
@@ -80,7 +99,8 @@ foreign `PYTHONPATH` makes this venv import the wrong numpy. If it stops, `pytho
 
 ## MCP registration
 
-Give the agent the two tools (`rag_search`, `rag_audit`). Add this to your Hermes `config.yaml` — it is YAML,
+Give the agent the three tools — `rag_search` (candidates), `rag_open` (the ones it chose), `rag_audit`
+(health). Add this to your Hermes `config.yaml` — it is YAML,
 so no braces and no quotes around the keys:
 
 ```yaml
@@ -91,7 +111,8 @@ mcp_servers:
 ```
 
 Use the **absolute** interpreter path: a system `python` will not have `numpy`/`mcp`. Restart the gateway
-(or start a new session) and the tools appear as `mcp_wetnoodle_rag_search` and `mcp_wetnoodle_rag_audit`.
+(or start a new session) and the tools appear as `mcp_wetnoodle_rag_search`, `mcp_wetnoodle_rag_open` and
+`mcp_wetnoodle_rag_audit`.
 
 ## Keeping it current
 
@@ -152,17 +173,19 @@ like for like; the full archive behaves the same way (see the next section). Ope
 Six of nineteen puts the right passage first. The grey bar is not a result — it is the ceiling: in seventeen
 of the nineteen, the right passage was already sitting among the twenty candidates search had found.
 
-That ceiling is the important number. Search is not failing to *find* things; it is failing to *choose*
-between near-misses. Nearly everything is recoverable, and the hard part is telling the one right passage
-from the nineteen that sound like it.
+That ceiling is the important number, and it is what the design is built around. Search does not fail to
+*find* things — it fails to *choose* between near-misses. So the choosing is given to the model doing the
+asking, which is the one thing in the stack that can hold twenty passages and a conversation at once.
+Retrieval supplies; the calling model selects.
 
 The twenty-seven questions used while building tell the same story at a different scale:
 
 ![](docs/img/dev.svg)
 
-In plain terms: **search answers about one question in three.** On the hardest questions — the ones whose
-detail appears in three passages or fewer, so lucky guessing cannot help — it is close to useless (2 of 8).
-This is an honest 5 out of 10, not a victory lap.
+In plain terms: **raw ranking answers about one question in three**, which is why nothing is meant to rely on
+the first hit. On the hardest questions — detail present in three passages or fewer — raw ranking gets 2 of 8
+while the right passage is in the pool 7 of 8. Those seven are recoverable by a model that reads. That gap is
+the entire reason `rag_search` returns candidates instead of an answer.
 
 If you want the exact figures, the splits, and how each number was produced: [`docs/models.md`](docs/models.md).
 

@@ -587,6 +587,34 @@ def fmt_date(ts):
 # --------------------------------------------------------------------------- #
 # audit
 # --------------------------------------------------------------------------- #
+def get_chunks(ids):
+    """Fetch chunks by id, preserving the caller's order. Used by the agent to open the candidates it chose.
+
+    Refs are `c<rowid>`; a bare integer is accepted too. Missing ids are reported rather than skipped
+    silently, because an agent that asked for a passage and got nothing back would quietly answer from
+    memory instead.
+    """
+    wanted, seen = [], set()
+    for raw in ids:
+        m = re.fullmatch(r"c?(\d+)", str(raw).strip(), re.I)
+        if m and int(m.group(1)) not in seen:
+            seen.add(int(m.group(1)))
+            wanted.append(int(m.group(1)))
+    if not wanted:
+        return [], []
+    con = sqlite3.connect(f"file:{RAG_DB}?mode=ro", uri=True)
+    con.row_factory = sqlite3.Row
+    rows = con.execute(
+        "SELECT id, msg_start, msg_end, session_id, role, ts, source, content, corpus "
+        f"FROM chunks WHERE id IN ({','.join('?' * len(wanted))})", wanted
+    ).fetchall()
+    con.close()
+    by_id = {r["id"]: dict(r) for r in rows}
+    found = [by_id[i] for i in wanted if i in by_id]
+    missing = [i for i in wanted if i not in by_id]
+    return found, missing
+
+
 def audit():
     """Index health report: per-corpus coverage + freshness, sizes, ollama."""
     con = sqlite3.connect(f"file:{RAG_DB}?mode=ro", uri=True)

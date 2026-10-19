@@ -155,3 +155,14 @@ on everyone.
 **The listwise judge was removed.** It reached 79% with a hosted model, but a 1.7B local model scored worse
 than plain search and a 4B model would not fit this machine's 4 GB card. See the section above; the numbers
 are kept, the code is not.
+
+## A fourth trap: the archive you debug becomes the evidence
+
+An eval set built from a live archive is contaminated the moment you discuss its answers in that same
+archive. Twelve of 46 markers in this project now appear in passages written *after* the questions were
+fixed — written by the assistant, debugging the questions. A re-run against the live store therefore scores
+higher than the original measurement for reasons that have nothing to do with retrieval.
+
+Two defences, both cheap: freeze the corpus you measure against (a copy of the store, not the live one), and
+never debug the eval text in the archive you will measure. If a number improves after the eval set has been
+discussed, suspect the corpus before believing the improvement.

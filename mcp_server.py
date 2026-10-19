@@ -1,13 +1,21 @@
 #!/usr/bin/env python3.11
 """
 mcp_server.py — MCP stdio server exposing the RAG memory archive to Hermes.
-SHARED MULTI-SOURCE ARCHIVE: one vector store indexes every Hermes profile's
-session database plus all SKILL.md documents. Each corpus keeps its own
-watermark, so no profile's history is silently skipped.
 
-Tools: rag_search(query, k, corpus) · rag_audit()
-Register under an mcp_servers entry of your choosing; tools then appear to the agent prefixed
-with that name. Requires numpy + mcp in the same interpreter the MCP server runs on.
+THE MODEL THAT RETRIEVES IS THE MODEL THAT JUDGES.
+
+There is no reranker, no judge endpoint and no second model anywhere in this design. Retrieval does what
+vectors are good at: propose a pool of plausible passages. Ranking what matters is done by the model that
+asked the question — the one already loaded, already holding the conversation, already paid for. It reads
+the candidates and calls `rag_open` on the ones that actually answer.
+
+Why this is the right split rather than a compromise: a re-reader has to compare the question against twenty
+passages. The calling model can do that, has context no external judge has, and costs nothing extra because
+it is already in the turn. A separate judge model would add an endpoint, a bill, and a copy of your
+conversation leaving the machine.
+
+Tools: rag_search(query, pool, corpus) · rag_open(refs) · rag_audit()
+Requires numpy + mcp in the same interpreter the MCP server runs on.
 """
 import json
 import os
@@ -21,27 +29,28 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("wetnoodle")
 
+# A snippet must be long enough to judge relevance from and short enough that twelve of them fit in a turn.
+SNIPPET = max(120, int(os.environ.get("RAG_SNIPPET_CHARS", "320")))
+
 
 @mcp.tool()
-def rag_search(query: str, k: int = 8, corpus: str = "", max_chars: int = 0) -> str:
-    """Semantic search over the indexed Hermes memory archive. The archive spans
-    MULTIPLE corpora: every Hermes profile's session database plus every
-    indexed SKILL.md document (corpus 'skill').
-    Returns top-k history chunks with date, session id, role, corpus and source.
+def rag_search(query: str, pool: int = 12, corpus: str = "") -> str:
+    """Search the memory archive and get a POOL OF CANDIDATES — not an answer, and not a ranking to trust.
 
-    Leave `corpus` empty to search everything. Pass e.g. 'skill' to search only
-    procedures/skills, or a profile name to search only that profile's history.
+    You are the judge. Read the candidates, then call `rag_open` with the refs that actually answer the
+    question. Do not answer from the first hit because it came first: measured on this archive, the right
+    passage is somewhere in the top twenty 84% of the time but first only about a third of the time.
 
-    Corpus matters: a generic query lets the biggest corpora win, so when you
-    know where the answer lives, name it.
+    Returns up to `pool` candidates (default 12, max 25), each with a ref like `c1234`, a date, a corpus, a
+    similarity score and a ~320-character snippet. Scores are cosine similarity and are a coarse guide only.
 
-    Output is BOUNDED: RAG_MAX_HIT_CHARS (800) per hit and RAG_MAX_TOTAL_CHARS
-    (6000) across the set, so a wide query cannot paste a context window full of
-    transcript. When the list is cut, the reply says so. `max_chars` overrides the
-    per-call total budget for a deliberate deep read."""
+    The archive spans MULTIPLE corpora: every Hermes profile's session database plus every indexed
+    SKILL.md (corpus 'skill'). Leave `corpus` empty to search everything; name it when you know where the
+    answer lives, because a generic query lets the biggest corpora win.
+    """
     try:
         hits = core.search(
-            query, k=max(1, min(int(k), 25)), corpus=(corpus or "").strip() or None
+            query, k=max(1, min(int(pool), 25)), corpus=(corpus or "").strip() or None
         )
     except ValueError as e:
         return f"rag_search error: {e}"
@@ -51,24 +60,53 @@ def rag_search(query: str, k: int = 8, corpus: str = "", max_chars: int = 0) -> 
         scope = f" (corpus={corpus!r})" if corpus else ""
         return f"no hits{scope} — index empty for that scope? see rag_audit"
 
+    lines = [f"{len(hits)} candidate(s) for: {query!r}",
+             "You are the judge: pick the ones that answer it, then call rag_open(refs).", ""]
+    for h in hits:
+        body = render.snippet((h.get("content") or "").replace("\n", " ⏎ "), query, SNIPPET)
+        lines.append(
+            f"[c{h['id']}] {core.fmt_date(h['ts'])} | {h.get('corpus', '?')} | {h['role']} | "
+            f"score {h['score']:.3f}\n    {body}"
+        )
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def rag_open(refs: list[str], max_chars: int = 0) -> str:
+    """Open the candidates you selected, in full. Pass refs from rag_search, e.g. ["c1234","c1250"].
+
+    This is the second half of judging: search proposes, you choose, this returns the whole passage so the
+    answer can be quoted from the source instead of reconstructed from a snippet. Output stays bounded by
+    RAG_MAX_HIT_CHARS per passage and RAG_MAX_TOTAL_CHARS overall; `max_chars` raises the total for a
+    deliberate deep read.
+    """
+    try:
+        hits, missing = core.get_chunks(refs)
+    except Exception as e:                      # noqa: BLE001 — a tool must not crash the server
+        return f"rag_open error: {type(e).__name__}: {e}"
+    if not hits:
+        return f"rag_open: no such chunk(s) {list(refs)} — refs are ephemeral; run rag_search again"
+
     def header(i, h, body):
         return (
-            f"{i:2d}. [{h['score']:.3f}] {core.fmt_date(h['ts'])} | "
-            f"{h.get('corpus', '?')} | {h['session_id']} | {h['role']} | "
-            f"msgs {h['msg_start']}-{h['msg_end']} | src={h['source']}\n"
-            f"{body}"
+            f"[c{h['id']}] {core.fmt_date(h['ts'])} | {h.get('corpus', '?')} | {h['session_id']} | "
+            f"{h['role']} | msgs {h['msg_start']}-{h['msg_end']}\n{body}"
         )
 
-    blocks, shown, available, _ = render.bounded(hits, header=header,
-                                                 total_chars=int(max_chars or 0))
-    return "\n\n".join(blocks) + render.note(shown, available)
+    blocks, shown, available, _ = render.bounded(
+        hits, header=header, total_chars=int(max_chars or 0)
+    )
+    out = "\n\n".join(blocks)
+    if missing:
+        out += f"\n\n[not found: {', '.join('c%d' % m for m in missing)}]"
+    return out + render.note(shown, available)
 
 
 @mcp.tool()
 def rag_audit() -> str:
-    """Index health: total and per-corpus chunk counts, per-corpus coverage and
-    freshness against each source database, sizes, schema version, and Ollama
-    reachability. Corpora whose source db was deleted show as frozen."""
+    """Index health: total and per-corpus chunk counts, per-corpus coverage and freshness against each
+    source database, sizes, schema version, and Ollama reachability. Corpora whose source db was deleted
+    show as frozen."""
     return json.dumps(core.audit(), indent=1)
 
 
