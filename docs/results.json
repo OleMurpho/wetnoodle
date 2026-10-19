@@ -1,88 +1,90 @@
 {
-  "_comment": "Every number is from the same 2,000-chunk corpus, 46 questions split 27 dev / 19 held out. The held-out half was never used to choose a setting. Regenerate the charts with scripts/charts.py.",
-  "question_set": {
-    "dev": 27,
-    "test": 19,
-    "total": 46
+ "_comment": "Every number is from the same 2,000-chunk corpus, 46 questions split 27 dev / 19 held out. The held-out half was never used to choose a setting. Regenerate the charts with scripts/charts.py.",
+ "question_set": {
+  "dev": 27,
+  "test": 19,
+  "total": 46
+ },
+ "held_out": [
+  {
+   "stage": "Plain search",
+   "correct_first": 6,
+   "of": 19,
+   "note": "what this kit ships"
   },
-  "held_out": [
-    {
-      "stage": "Plain search",
-      "correct_first": 6,
-      "of": 19,
-      "note": "what this kit ships"
-    },
-    {
-      "stage": "Plus a careful re-read",
-      "correct_first": 9,
-      "of": 19,
-      "note": "optional: needs an extra dependency; measured, not part of the kit"
-    },
-    {
-      "stage": "Answer was available to pick",
-      "correct_first": 17,
-      "of": 19,
-      "note": "ceiling, not a result"
-    }
-  ],
-  "dev": [
-    {
-      "stage": "Plain search",
-      "correct_first": 11,
-      "of": 27
-    },
-    {
-      "stage": "Plus a careful re-read",
-      "correct_first": 14,
-      "of": 27,
-      "note": "optional: needs an extra dependency; measured, not part of the kit"
-    },
-    {
-      "stage": "Answer was available to pick",
-      "correct_first": 24,
-      "of": 27
-    }
-  ],
-  "rejected": [
-    {
-      "change": "Short context line above every passage",
-      "effect": -7,
-      "unit": "questions (dev)",
-      "of": 27
-    },
-    {
-      "change": "Session topic instead of full context",
-      "effect": -3,
-      "unit": "questions (dev)",
-      "of": 27
-    },
-    {
-      "change": "Rare-term gate for identifier queries",
-      "effect": -1,
-      "unit": "questions (dev)",
-      "of": 27
-    },
-    {
-      "change": "Removing all 1,570 duplicate passages",
-      "effect": 0,
-      "unit": "questions (dev)",
-      "of": 27
-    },
-    {
-      "change": "Keyword boosting across the whole corpus",
-      "effect": -2,
-      "unit": "questions recalled (10-q set)",
-      "of": 10
-    }
-  ],
-  "abandoned": [
-    {
-      "change": "Ranking 50 candidates instead of 20",
-      "why": "~3x the cost per search; on a 6-core CPU it did not clear ten questions in 46 minutes"
-    },
-    {
-      "change": "A 4B embedding model instead of 0.6B",
-      "why": "~0.8 passages/s on a 4GB card, ~2.7 hours for one index; and the oracle showed recall was not the constraint"
-    }
-  ]
+  {
+   "stage": "Plus a cross-encoder re-read",
+   "correct_first": 9,
+   "of": 19,
+   "note": "not shipped: needs an extra dependency; kept as a record",
+   "shipped": false
+  },
+  {
+   "stage": "Answer was available to pick",
+   "correct_first": 17,
+   "of": 19,
+   "note": "ceiling, not a result"
+  }
+ ],
+ "dev": [
+  {
+   "stage": "Plain search",
+   "correct_first": 11,
+   "of": 27
+  },
+  {
+   "stage": "Plus a cross-encoder re-read",
+   "correct_first": 14,
+   "of": 27,
+   "note": "not shipped: needs an extra dependency; kept as a record",
+   "shipped": false
+  },
+  {
+   "stage": "Answer was available to pick",
+   "correct_first": 24,
+   "of": 27
+  }
+ ],
+ "rejected": [
+  {
+   "change": "Short context line above every passage",
+   "effect": -7,
+   "unit": "questions (dev)",
+   "of": 27
+  },
+  {
+   "change": "Session topic instead of full context",
+   "effect": -3,
+   "unit": "questions (dev)",
+   "of": 27
+  },
+  {
+   "change": "Rare-term gate for identifier queries",
+   "effect": -1,
+   "unit": "questions (dev)",
+   "of": 27
+  },
+  {
+   "change": "Removing all 1,570 duplicate passages",
+   "effect": 0,
+   "unit": "questions (dev)",
+   "of": 27
+  },
+  {
+   "change": "Keyword boosting across the whole corpus",
+   "effect": -2,
+   "unit": "questions recalled (10-q set)",
+   "of": 10
+  }
+ ],
+ "abandoned": [
+  {
+   "change": "Ranking 50 candidates instead of 20",
+   "why": "~3x the cost per search; on a 6-core CPU it did not clear ten questions in 46 minutes"
+  },
+  {
+   "change": "A 4B embedding model instead of 0.6B",
+   "why": "~0.8 passages/s on a 4GB card, ~2.7 hours for one index; and the oracle showed recall was not the constraint"
+  }
+ ]
 }

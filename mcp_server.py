@@ -85,7 +85,8 @@ def rag_open(refs: list[str], max_chars: int = 0) -> str:
     except Exception as e:                      # noqa: BLE001 — a tool must not crash the server
         return f"rag_open error: {type(e).__name__}: {e}"
     if not hits:
-        return f"rag_open: no such chunk(s) {list(refs)} — refs are ephemeral; run rag_search again"
+        return (f"rag_open: no such chunk(s) {list(refs)} — refs are c<rowid>; a re-ingest can retire an id, "
+                f"so run rag_search again if this was from an earlier session")
 
     def header(i, h, body):
         return (
