@@ -30,9 +30,9 @@ Two search paths are exposed, and the page says which is which:
   uses, at lower precision and with no keyword rerank — the ranking you see is close to the archive's, not
   identical. The page states the rank of the abstract each example came from.
 
-That curation is disclosed on the page: of 46 titles sampled across the corpus, 30 retrieved their own
-abstract in the top three, and the examples are drawn from those 30. It is a demo of the mechanism, not a
-benchmark — [Does it actually find the right answer?](#does-it-actually-find-the-right-answer) is the benchmark, on a real archive with a held-out set.
+That curation is disclosed on the page. We drew 59 titles across the corpus, kept the 46 long enough to be a
+fair query, and 30 of those 46 retrieved their own abstract in the top three; the examples are drawn from
+those 30. It is a demo of the mechanism, not a benchmark — [Does it actually find the right answer?](#does-it-actually-find-the-right-answer) is the benchmark, on a real archive with a held-out set.
 
 ## Why this shape
 
@@ -53,11 +53,19 @@ benchmark — [Does it actually find the right answer?](#does-it-actually-find-t
 |---|---|
 | Python | 3.11+ |
 | Ollama | **local daemon**, `127.0.0.1:11434` |
-| Embedding model | `nomic-embed-text` (274 MB, CPU is fine) |
+| Embedding model | `nomic-embed-text` (274 MB) — **required**, not optional |
 | Disk | ~1 MB per 200 chunks |
 
-Ollama Cloud cannot be used: its `/api/embed` returns `401` and `/v1/embeddings` `404` for embedding models.
-A local daemon is a hard requirement, and that is deliberate — your archive should not need a key.
+**This is the one dependency that cannot be swapped out or skipped.** There is no fallback to keyword search,
+no hosted substitute, and no reduced mode: without a local embedding model, `ingest.py` cannot index and
+`query.py` cannot search. That is deliberate — an archive of your conversations should not need an API key.
+
+Ollama Cloud will not do: its `/api/embed` returns `401` and `/v1/embeddings` `404` for embedding models. It
+has to be a daemon on your own machine, at `127.0.0.1:11434` by default.
+
+The demo page on GitHub is the single exception, and only because a web page cannot run the model:
+**its typed searches are keyword-only**, and its twelve examples replay vectors that were computed locally
+beforehand. The demo shows what the maths does; it is not the product running.
 
 ## Quickstart
 
@@ -72,15 +80,14 @@ foreign `PYTHONPATH` makes this venv import the wrong numpy. If it stops, `pytho
 
 ## MCP registration
 
-Give the agent the two tools (`rag_search`, `rag_audit`). In your Hermes config:
+Give the agent the two tools (`rag_search`, `rag_audit`). Add this to your Hermes `config.yaml` — it is YAML,
+so no braces and no quotes around the keys:
 
-```json
-"mcp_servers": {
-  "wetnoodle": {
-    "command": "/absolute/path/to/wetnoodle/.venv/bin/python",
-    "args": ["/absolute/path/to/wetnoodle/mcp_server.py"]
-  }
-}
+```yaml
+mcp_servers:
+  wetnoodle:
+    command: /absolute/path/to/wetnoodle/.venv/bin/python
+    args: [/absolute/path/to/wetnoodle/mcp_server.py]
 ```
 
 Use the **absolute** interpreter path: a system `python` will not have `numpy`/`mcp`. Restart the gateway
@@ -112,24 +119,23 @@ ingest only appends. In Hermes you can schedule the same script with the `cronjo
 | `python doctor.py` | preflight every dependency |
 | `python -E -m unittest discover -s tests -q` | smoke test, no Ollama needed (`-E` ignores a stray `PYTHONPATH`) |
 
-## Tuning
+## Settings
 
-All optional, all environment variables:
+Defaults are right for almost everyone. These exist for relocating the store, not for experimenting:
 
 | Variable | Default | Effect |
 |---|---|---|
 | `RAG_DIR` | `~/.wetnoodle` | where `rag.db` lives |
-| `RAG_HERMES_HOME` | `~/.hermes` | Hermes install to index |
+| `RAG_HERMES_HOME` | `~/.hermes` | the Hermes install to index |
 | `RAG_EMBED_MODEL` | `nomic-embed-text` | **pins vector dim**; changing it requires `ingest.py --full` |
-| `RAG_OLLAMA` | `http://127.0.0.1:11434` | daemon URL |
+| `RAG_OLLAMA` | `http://127.0.0.1:11434` | the local daemon |
 | `RAG_SKILLS_DIRS` | discovered | override skill roots (`:`-separated) |
 | `RAG_MAX_HIT_CHARS` | `800` | per-hit cap in tool output |
 | `RAG_MAX_TOTAL_CHARS` | `6000` | cap across the whole result set |
-| `RAG_HYBRID` | `1` | keyword rerank inside vector candidates |
-| `RAG_VEC_WEIGHT` | `0.7` | vector share of the rerank blend |
-| `RAG_PER_CORPUS` | `0` | per-corpus slot quotas — **measured worse, off** (hit@8 19/27 → 18/27, no gain at rank 1) |
-| `RAG_PER_CORPUS_QUOTA` | `2` | slots per corpus when quotas are on |
-| `RAG_DOC_PREFIX` / `RAG_QUERY_PREFIX` | per model family | task prefixes; wrong ones measurably hurt — see `docs/models.md` |
+
+The retrieval knobs behind these (`RAG_HYBRID`, `RAG_VEC_WEIGHT`, per-corpus quotas, model prefixes) are
+documented in [`docs/models.md`](docs/models.md) with the measurement that settled each one. Every one of
+them is measured worse or neutral than the default, so there is no reason to reach for them.
 
 ## Does it actually find the right answer?
 
@@ -143,9 +149,8 @@ like for like; the full archive behaves the same way (see the next section). Ope
 
 ![](docs/img/held-out.svg)
 
-Six of nineteen puts the right passage first. Nine when an optional re-reader goes back over the twenty
-candidates it was handed (see the next section). The grey bar is not a result — it is the ceiling: in
-seventeen of the nineteen, the right passage was already sitting in those twenty candidates.
+Six of nineteen puts the right passage first. The grey bar is not a result — it is the ceiling: in seventeen
+of the nineteen, the right passage was already sitting among the twenty candidates search had found.
 
 That ceiling is the important number. Search is not failing to *find* things; it is failing to *choose*
 between near-misses. Nearly everything is recoverable, and the hard part is telling the one right passage
@@ -155,33 +160,11 @@ The twenty-seven questions used while building tell the same story at a differen
 
 ![](docs/img/dev.svg)
 
-In plain terms: **plain search answers about one question in three, and a second pass over the candidates
-gets you to about one in two.** On the hardest questions — the ones whose detail appears in three passages or
-fewer, so lucky guessing cannot help — plain search is close to useless (2 of 8) and the second pass roughly
-doubles it. This is an honest 5 out of 10, not a victory lap.
+In plain terms: **search answers about one question in three.** On the hardest questions — the ones whose
+detail appears in three passages or fewer, so lucky guessing cannot help — it is close to useless (2 of 8).
+This is an honest 5 out of 10, not a victory lap.
 
 If you want the exact figures, the splits, and how each number was produced: [`docs/models.md`](docs/models.md).
-
-## The optional upgrade, and why it is not the default
-
-**A second pass over the candidates** — a cross-encoder, about 570 MB, runs on the processor, no account
-needed. On our fixed 2,000-passage comparison set it lifted the held-out figure from 6 to 9 of 19.
-
-On the full 7,674-passage archive it did **worse than plain search on its own** (8 of 19 against 9), and only
-beat plain search when its score was blended half-and-half with the original (10 of 19). So the honest size of
-this upgrade on a real archive is about one extra question in nineteen — for one more dependency and a second
-or two per search. Optional, and not obviously worth it:
-
-```bash
-pip install fastembed        # snippet in docs/models.md
-```
-
-There was a third option: a language model reading all twenty candidates at once and picking the best. It
-scored 15 of 19 — by far the best result of anything we tried — but it needs a model with real reasoning
-ability, and this archive is built on a machine with a 4 GB card. The 4 B model would not fit and spilled to
-the processor at forty seconds a turn; a 1.7 B model that did fit scored **worse than plain search** (4 of 19
-against 6). The code is gone rather than shipped and switched off, because a feature that cannot be trusted
-to improve an answer should not be one `export` away from making it worse.
 
 ## Ideas that did not survive being measured
 
@@ -215,15 +198,15 @@ Two more were abandoned before they finished, so they carry no number:
   by what was said.
 - **One embedding model per store.** Switching models without `--full` is a dimension mismatch, which reads
   like corruption.
-- **No reranker in the default path, no query expansion, no agentic retrieval.** All three are plausible next
-  steps; only the reranker exists, and it is optional because on a real archive it is worth roughly one extra
-  question in nineteen.
+- **No reranker, no query expansion, no agentic retrieval.** All three are plausible next steps and none is
+  implemented. A second scoring pass was measured at roughly one extra question in nineteen; it is recorded in
+  `docs/models.md` and is not part of this kit.
 - **Not multi-user.** It indexes the Hermes install it can see; there is no auth layer.
 
-## Prior art
+## Other projects, and what we took from them
 
 The marker-based recall scoring, bounded recall output, text export/rebuild and the job-runtime isolation
-pattern were inspired by [tomRumi/hermes-memory-rag](https://github.com/tomRumi/hermes-memory-rag) (MIT),
+pattern came from [tomRumi/hermes-memory-rag](https://github.com/tomRumi/hermes-memory-rag) (MIT),
 which solves the adjacent problem of curated project memory. No code was copied; the mechanisms were
 reimplemented against this store and independently measured. See `docs/troubleshooting.md` for the traps that
 came out of that comparison.

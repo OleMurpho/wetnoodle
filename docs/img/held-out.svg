@@ -1,27 +1,23 @@
-<svg xmlns='http://www.w3.org/2000/svg' width='760' height='260' viewBox='0 0 760 260' role='img' aria-label='Questions kept back from tuning'>
-<rect width='760' height='260' fill='white'/>
+<svg xmlns='http://www.w3.org/2000/svg' width='760' height='214' viewBox='0 0 760 214' role='img' aria-label='Questions kept back from tuning'>
+<rect width='760' height='214' fill='white'/>
 <text x='18' y='30' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='17' font-weight='600' fill='#1f2933'>Questions kept back from tuning</text>
 <text x='18' y='52' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#7b8794'>These 19 questions were never used while building, so this is the honest picture</text>
-<line x1='268.0' y1='70' x2='268.0' y2='214' stroke='#e4e7eb' stroke-width='1'/>
-<text x='268.0' y='232' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>0%</text>
-<line x1='362.5' y1='70' x2='362.5' y2='214' stroke='#e4e7eb' stroke-width='1'/>
-<text x='362.5' y='232' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>25%</text>
-<line x1='457.0' y1='70' x2='457.0' y2='214' stroke='#e4e7eb' stroke-width='1'/>
-<text x='457.0' y='232' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>50%</text>
-<line x1='551.5' y1='70' x2='551.5' y2='214' stroke='#e4e7eb' stroke-width='1'/>
-<text x='551.5' y='232' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>75%</text>
-<line x1='646.0' y1='70' x2='646.0' y2='214' stroke='#e4e7eb' stroke-width='1'/>
-<text x='646.0' y='232' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>100%</text>
+<line x1='268.0' y1='70' x2='268.0' y2='168' stroke='#e4e7eb' stroke-width='1'/>
+<text x='268.0' y='186' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>0%</text>
+<line x1='362.5' y1='70' x2='362.5' y2='168' stroke='#e4e7eb' stroke-width='1'/>
+<text x='362.5' y='186' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>25%</text>
+<line x1='457.0' y1='70' x2='457.0' y2='168' stroke='#e4e7eb' stroke-width='1'/>
+<text x='457.0' y='186' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>50%</text>
+<line x1='551.5' y1='70' x2='551.5' y2='168' stroke='#e4e7eb' stroke-width='1'/>
+<text x='551.5' y='186' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>75%</text>
+<line x1='646.0' y1='70' x2='646.0' y2='168' stroke='#e4e7eb' stroke-width='1'/>
+<text x='646.0' y='186' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>100%</text>
 <text x='18' y='94' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='13' fill='#1f2933'>Plain search</text>
 <text x='18' y='109' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='10.5' fill='#7b8794'>what this kit ships</text>
 <rect x='268' y='82' width='119.4' height='22' rx='3' fill='#4a6fa5'/>
 <text x='395.4' y='97' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='12.5' font-weight='500' fill='#1f2933'>6 of 19 (32%)</text>
-<text x='18' y='140' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='13' fill='#1f2933'>Plus a careful re-read</text>
-<text x='18' y='155' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='10.5' fill='#7b8794'>optional: cross-encoder, needs fastembed</text>
-<rect x='268' y='128' width='179.1' height='22' rx='3' fill='#4a6fa5'/>
-<text x='455.1' y='143' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='12.5' font-weight='500' fill='#1f2933'>9 of 19 (47%)</text>
-<text x='18' y='186' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='13' fill='#1f2933'>Answer was available to pick</text>
-<text x='18' y='201' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='10.5' fill='#7b8794'>ceiling, not a result</text>
-<rect x='268' y='174' width='338.2' height='22' rx='3' fill='#9aa5b1'/>
-<text x='614.2' y='189' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='12.5' font-weight='500' fill='#1f2933'>17 of 19 (89%)</text>
+<text x='18' y='140' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='13' fill='#1f2933'>Answer was available to pick</text>
+<text x='18' y='155' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='10.5' fill='#7b8794'>ceiling, not a result</text>
+<rect x='268' y='128' width='338.2' height='22' rx='3' fill='#9aa5b1'/>
+<text x='614.2' y='143' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='12.5' font-weight='500' fill='#1f2933'>17 of 19 (89%)</text>
 </svg>

@@ -10,9 +10,16 @@ PATTERN='olemurpho|mlope|stormhold|stormrider|stormbreaker|slartibartfast|mnemos
 # nothing else is. Anything else matching the pattern is a leak from the machine this was built on.
 # Whitelisted, exactly two strings: the repo's own clone URL and its own Pages address. Both contain the
 # owner's handle by necessity. Nothing else is exempt.
-hits=$(grep -rniE "$PATTERN" . --exclude-dir=.git --exclude-dir=__pycache__ --exclude=LICENSE \
-         --exclude=hygiene.sh \
-       | grep -viE 'github\.com/OleMurpho/wetnoodle|olemurpho\.github\.io/wetnoodle' || true)
+# Scan only what would actually be published: the tracked files. Scanning the working tree means a local
+# .venv trips the gate on its own absolute shebangs — which says nothing about what a reader of the repo sees.
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  hits=$(git ls-files -z | xargs -0 -r grep -niE "$PATTERN" --exclude=LICENSE --exclude=hygiene.sh 2>/dev/null \
+         | grep -viE 'github\.com/OleMurpho/wetnoodle|olemurpho\.github\.io/wetnoodle' || true)
+else
+  hits=$(grep -rniE "$PATTERN" . --exclude-dir=.git --exclude-dir=.venv --exclude-dir=__pycache__ \
+           --exclude-dir=imports --exclude='*.db*' --exclude=LICENSE --exclude=hygiene.sh \
+         | grep -viE 'github\.com/OleMurpho/wetnoodle|olemurpho\.github\.io/wetnoodle' || true)
+fi
 if [ -n "$hits" ]; then
   echo "FAIL — machine-specific strings in a public repo:"; echo "$hits"; exit 1
 fi

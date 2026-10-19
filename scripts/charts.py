@@ -127,13 +127,19 @@ def rejected_svg(rows):
     return "\n".join(out)
 
 
-held, dev = DATA["held_out"], DATA["dev"]
+def shipped(rows):
+    """The README shows what the kit does and the ceiling it is measured against — nothing that needs an
+    extra install, so the chart cannot read as a menu of upgrades."""
+    return [r for r in rows if not r.get("note", "").startswith("optional")]
+
+
+held, dev = shipped(DATA["held_out"]), shipped(DATA["dev"])
 open(os.path.join(OUT, "held-out.svg"), "w").write(stage_svg(
     held, "Questions kept back from tuning",
     "These %d questions were never used while building, so this is the honest picture" % held[0]["of"]))
 open(os.path.join(OUT, "dev.svg"), "w").write(stage_svg(
     dev, "The other %d questions, used while building" % dev[0]["of"],
-    "Same three stages on the same corpus — the two pictures agree, which is the point"))
+    "Same two bars on the same corpus — the two pictures agree, which is the point"))
 open(os.path.join(OUT, "rejected.svg"), "w").write(rejected_svg(DATA["rejected"]))
 
 for f in sorted(os.listdir(OUT)):

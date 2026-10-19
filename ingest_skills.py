@@ -117,7 +117,10 @@ def run(force=False, prune=False):
         todo.append((name, path, raw, digest))
 
     if not todo:
-        print("all skills already indexed and unchanged (use --all to force).")
+        if not skills:
+            print("no SKILL.md files found — check RAG_SKILLS_DIRS or RAG_HERMES_HOME.")
+        else:
+            print(f"all {len(skills)} skill(s) already indexed and unchanged (use --all to force).")
         con.close()
         return
 

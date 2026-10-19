@@ -16,7 +16,7 @@
       "stage": "Plus a careful re-read",
       "correct_first": 9,
       "of": 19,
-      "note": "optional: cross-encoder, needs fastembed"
+      "note": "optional: needs an extra dependency; measured, not part of the kit"
     },
     {
       "stage": "Answer was available to pick",
@@ -34,7 +34,8 @@
     {
       "stage": "Plus a careful re-read",
       "correct_first": 14,
-      "of": 27
+      "of": 27,
+      "note": "optional: needs an extra dependency; measured, not part of the kit"
     },
     {
       "stage": "Answer was available to pick",

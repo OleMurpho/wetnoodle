@@ -61,8 +61,11 @@
     Examples run <strong>cosine similarity in your browser</strong> over vectors computed locally by
     <code>nomic-embed-text</code> (256 dims, int8-quantised). Data: PubMed abstracts via NCBI E-utilities,
     NLM public data. Each example is a real paper title, and the page reports the rank of the abstract it
-    came from. Of 46 titles sampled across the corpus, 30 returned their own abstract in the top three; the
-    examples above are drawn from those, which is curation, not a claim about the other 16.
+    came from. This page has no embedding model of its own — a browser cannot run one — so typed searches are
+    keyword-only (BM25) and the examples replay vectors computed locally beforehand.
+    We drew 59 titles across the corpus, kept the 46 long enough to be a fair query, and 30 of those 46
+    returned their own abstract in the top three. The examples above are drawn from those 30: that is curation,
+    not a claim about the other 16.
     <br><br><a href="https://github.com/OleMurpho/wetnoodle">github.com/OleMurpho/wetnoodle</a>
   </footer>
 </div>
