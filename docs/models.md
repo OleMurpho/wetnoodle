@@ -47,3 +47,35 @@ because it is the correct estimator, not because it was measured to win.
   alternative is a cross-encoder reranker over the top-20 rather than a bigger embedder.
 - If you change model, delete the old `rag.db` rather than mixing: a dimension mismatch surfaces as
   "corruption" and wastes an afternoon.
+
+## Reranking (the biggest single win, measured)
+
+Two-stage retrieval: the embedder's job is **recall** — get the answer into a candidate list — and a
+cross-encoder's job is **precision** — order that list by reading query and passage jointly, which a
+bi-encoder cannot do at index time. Cost is per-query latency, not an index rebuild.
+
+Tested with `BAAI/bge-reranker-v2-m3-int8` via `fastembed` (ONNX, 570 MB, CPU — no torch), reranking the
+top-20 candidates, same 2,000-chunk corpus and question sets:
+
+| | retriever only | + cross-encoder | oracle (answer in top-20) |
+|---|---|---|---|
+| nomic, dev hit@1 | 9/27 (33%) | **13/27 (48%)** | 19/27 (70%) |
+| nomic, dev hit@3 | 15/27 (56%) | **17/27 (63%)** | — |
+| Qwen3-0.6B, dev hit@1 | 11/27 (41%) | **14/27 (52%)** | 24/27 (89%) |
+| Qwen3-0.6B, test hit@1 | 6/19 (32%) | **9/19 (47%)** | 17/19 (89%) |
+| Qwen3-0.6B, test hit@3 | 12/19 (63%) | **15/19 (79%)** | — |
+| Qwen3-0.6B, test strict hit@1 | 2/8 (25%) | **4/8 (50%)** | — |
+
+Read the oracle column carefully: with Qwen3 the answering passage is in the top 20 **89%** of the time, yet
+the reranker only converts about half of that into rank 1. So past this point the **reranker** is the
+bottleneck, not the embedder. A bigger embedder raises the ceiling; it does not fix the conversion.
+
+Two things that did **not** work here, both measured:
+
+- **Reranking 50 candidates instead of 20.** It costs ~3× per query and on a 6-core CPU it failed to clear ten
+  questions in 46 minutes. More candidates only help if the reranker can afford to read them.
+- **Blending the cross-encoder score with the retriever score** — included in the harness, no gain over the
+  cross-encoder alone.
+
+If you want to push further, spend it on a stronger reranker (fp32 `BAAI/bge-reranker-v2-m3` or
+`jinaai/jina-reranker-v2-base-multilingual`), not on a larger embedder.
