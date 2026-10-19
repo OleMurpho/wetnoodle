@@ -15,6 +15,20 @@ you ──▶ skills (*/SKILL.md) ───────────────�
                                              agent (MCP tool) / query.py ◀── search ───┘
 ```
 
+## Try it without installing anything
+
+**→ https://olemurpho.github.io/wetnoodle/**
+
+A self-contained page that runs the real ranking maths in your browser over a synthetic 51-turn archive (a
+fictional robotics project — no real user data). Query embeddings were computed locally with
+`nomic-embed-text` and shipped with the page, so the cosine ranking you see is genuine, not a mock. Typed text
+falls back to BM25, because a browser has no embedding model.
+
+Passages containing the answer string are outlined in green, with the answer's rank shown above the results.
+Some questions put the answer below rank 1. That is deliberate: the page is there to make retrieval
+*checkable*, not to look impressive. The numbers in [Honest numbers](#honest-numbers) come from the same
+kind of measurement, on a real archive with a held-out question set.
+
 ## Why this shape
 
 - **Multi-corpus, per-corpus watermarks.** Each profile's database keeps its own incremental cursor, so a
