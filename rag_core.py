@@ -581,7 +581,7 @@ def fmt_date(ts):
     import datetime
     if not ts:
         return "?"
-    return datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).strftime("%Y-%m-%d %H:%M")
+    return datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
 
 
 # --------------------------------------------------------------------------- #

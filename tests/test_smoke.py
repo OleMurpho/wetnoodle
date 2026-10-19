@@ -181,5 +181,16 @@ class SmokeTest(unittest.TestCase):
         _, missing = core.get_chunks(["c999999999"])
         self.assertEqual(missing, [999999999])
 
+    def test_8_dates_are_local_not_utc(self):
+        """A UTC label on a local epoch put every passage hours in the future."""
+        import datetime
+        import time
+        import rag_core as core
+        now = time.time()
+        shown = datetime.datetime.strptime(core.fmt_date(now - 60), "%Y-%m-%d %H:%M")
+        drift = abs((datetime.datetime.now().replace(second=0, microsecond=0) - shown).total_seconds())
+        self.assertLess(drift, 600, f"fmt_date drifts {drift/60:.0f} min from local time")
+        self.assertEqual(core.fmt_date(0), "?")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
