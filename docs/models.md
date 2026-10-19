@@ -107,10 +107,14 @@ export RAG_JUDGE_MODEL=qwen3:4b        # any OpenAI-compatible chat model
 
 Unset by default: with no `RAG_JUDGE_MODEL`, search is plain retrieval and no network call is made.
 
-**Hosted endpoints are refused by default.** The judge runs on every search, so a hosted base URL turns every
-search into a billable request — including those triggered by anyone who can message an agent using this
-archive. Setting a non-local `RAG_JUDGE_BASE_URL` without `RAG_JUDGE_ALLOW_REMOTE=1` disables the judge and
-warns on stderr. The measurements below used hosted models for evaluation only; the shipped default is local.
+**Hosted endpoints are refused, with no override.** The judge runs on every search, so a hosted base URL turns
+every search into a billable request — including searches triggered by anyone who can message an agent using
+this archive. A non-local `RAG_JUDGE_BASE_URL` disables the judge and warns on stderr; no flag enables it.
+The measurements below used hosted models for the comparison only; the shipped default is local.
+
+**Small local models do not do this job.** `qwen3:1.7b` as the judge scored *worse than no judge at all* —
+6/19 → 4/19 on the held-out set, with parseable answers, so it is a capability limit rather than a parser
+bug. Listwise comparison of twenty passages is not a 2B-scale task; budget for the largest model that fits.
 
 ### Three ways this measurement was wrong before it was right
 
@@ -129,3 +133,29 @@ the table above is trustworthy:
 Failure policy in `judge.py`: any error, timeout, or unparseable reply returns the retriever's order unchanged.
 A judge outage degrades recall to the dense baseline; it never breaks search and never invents a result.
 
+## What you actually get on a full archive
+
+The tables above use a fixed 2,000-chunk comparison set so every change is comparable. On the real 7,674-chunk
+archive, with the same 46 questions, the numbers are:
+
+| configuration | dev (27) | held out (19) | answer present in top-20 |
+|---|---|---|---|
+| plain search (this kit's default) | 13/27 (48%) | 9/19 (47%) | 16/19 (84%) |
+| + cross-encoder, blended (optional) | — | 10/19 (53%) | 16/19 (84%) |
+| + listwise judge (optional, needs a capable local model) | — | 15/19 (79%)* | 17/19 (89%)* |
+
+\* measured on the 2,000-chunk set with a hosted model, before the local-only rule. Kept for reference: it is
+the ceiling a capable re-reader reaches, not something this kit will spend for you.
+
+The full archive scores slightly better than the subset because more context is available, and the plain-search
+gap between dev and held-out (48% vs 47%) is small — the two splits behave the same way, which is the sign that
+the number is real rather than tuned.
+
+**Why the cross-encoder is not the default.** It costs one extra dependency (fastembed, ~570 MB of ONNX) and a
+second or two per search for six points on the held-out set. Reasonable if you want it; not reasonable to force
+on everyone.
+
+**Why the judge is not the default either.** Measured on this machine: `qwen3:4b` would not fit a 4 GB card
+(18% GPU / 82% CPU, 41 s for a trivial prompt), and `qwen3:1.7b`, which did fit, scored **worse than plain
+search** (4/19 against 6/19) — listwise comparison of twenty passages is not a small-model task. It stays in
+the repo, off, for machines that can run a 7B model comfortably.

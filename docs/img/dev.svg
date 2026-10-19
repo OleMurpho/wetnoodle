@@ -1,0 +1,24 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='760' height='260' viewBox='0 0 760 260' role='img' aria-label='The other 27 questions, used while building'>
+<rect width='760' height='260' fill='white'/>
+<text x='18' y='30' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='17' font-weight='600' fill='#1f2933'>The other 27 questions, used while building</text>
+<text x='18' y='52' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#7b8794'>Same three stages on the same corpus — the two pictures agree, which is the point</text>
+<line x1='268.0' y1='70' x2='268.0' y2='214' stroke='#e4e7eb' stroke-width='1'/>
+<text x='268.0' y='232' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>0%</text>
+<line x1='362.5' y1='70' x2='362.5' y2='214' stroke='#e4e7eb' stroke-width='1'/>
+<text x='362.5' y='232' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>25%</text>
+<line x1='457.0' y1='70' x2='457.0' y2='214' stroke='#e4e7eb' stroke-width='1'/>
+<text x='457.0' y='232' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>50%</text>
+<line x1='551.5' y1='70' x2='551.5' y2='214' stroke='#e4e7eb' stroke-width='1'/>
+<text x='551.5' y='232' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>75%</text>
+<line x1='646.0' y1='70' x2='646.0' y2='214' stroke='#e4e7eb' stroke-width='1'/>
+<text x='646.0' y='232' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#7b8794' text-anchor='middle'>100%</text>
+<text x='18' y='94' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='13' fill='#1f2933'>Plain search</text>
+<rect x='268' y='82' width='154.0' height='22' rx='3' fill='#4a6fa5'/>
+<text x='430.0' y='97' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='12.5' font-weight='500' fill='#1f2933'>11 of 27 (41%)</text>
+<text x='18' y='140' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='13' fill='#1f2933'>Plus a careful re-read</text>
+<rect x='268' y='128' width='196.0' height='22' rx='3' fill='#4a6fa5'/>
+<text x='472.0' y='143' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='12.5' font-weight='500' fill='#1f2933'>14 of 27 (52%)</text>
+<text x='18' y='186' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='13' fill='#1f2933'>Answer was available to pick</text>
+<rect x='268' y='174' width='336.0' height='22' rx='3' fill='#9aa5b1'/>
+<text x='612.0' y='189' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif' font-size='12.5' font-weight='500' fill='#1f2933'>24 of 27 (89%)</text>
+</svg>

@@ -31,7 +31,7 @@ Two search paths are exposed, and the page says which is which:
 
 That curation is disclosed on the page: of 46 titles sampled across the corpus, 30 retrieved their own
 abstract in the top three, and the examples are drawn from those 30. It is a demo of the mechanism, not a
-benchmark — [Honest numbers](#honest-numbers) is the benchmark, on a real archive with a held-out set.
+benchmark — [Does it actually find the right answer?](#does-it-actually-find-the-right-answer) is the benchmark, on a real archive with a held-out set.
 
 ## Why this shape
 
@@ -43,7 +43,7 @@ benchmark — [Honest numbers](#honest-numbers) is the benchmark, on a real arch
   archive is ~40 MB and indexes in a couple of minutes on CPU.
 - **Nothing is thrown away.** A profile you delete keeps its corpus as *frozen* history rather than vanishing
   from the archive.
-- **Measurable.** `eval_recall.py` scores retrieval quality (see [Honest numbers](#honest-numbers)).
+- **Measurable.** `eval_recall.py` scores retrieval quality (see [Does it actually find the right answer?](#does-it-actually-find-the-right-answer)).
 
 ## Requirements
 
@@ -102,7 +102,7 @@ ingest only appends. In Hermes you can schedule the same script with the `cronjo
 | `python ingest.py --purge-missing` | drop corpora whose source database is gone |
 | `python ingest_skills.py` | index every `SKILL.md` |
 | `python query.py "text" [--k N] [--corpus C]` | search from the shell |
-| `python eval_recall.py` | retrieval gate: MRR, hit@1, hit@k |
+| `python eval_recall.py` | retrieval gate: where each known answer comes back |
 | `python eval_recall.py --verify-markers` | is each eval marker actually present? |
 | `python export_store.py --corpus X --out f.jsonl` | corpus → text (portable, diffable) |
 | `python import_store.py f.jsonl --corpus peer` | text → corpus (re-embedded locally) |
@@ -126,48 +126,79 @@ All optional, all environment variables:
 | `RAG_VEC_WEIGHT` | `0.7` | vector share of the rerank blend |
 | `RAG_PER_CORPUS` | `0` | per-corpus slot quotas — **measured worse, off** (see below) |
 
-## Honest numbers
+## Does it actually find the right answer?
 
-Retrieval here is measured, not assumed. 46 hand-written questions carrying unique identifier markers, split
-**dev 27 / test 19**, with the test half held out and never used to choose anything:
+We wrote 46 questions about things that really happened in this archive. Each one carries a distinctive
+detail — a command, a hostname, a number — that appears in exactly one passage. Then we asked the only
+question that matters: when you search, does the passage holding that detail come back **first**?
 
-| configuration | dev hit@1 | held-out hit@1 | combined |
-|---|---|---|---|
-| dense (Qwen3-Embedding-0.6B) | 11/27 (41%) | 6/19 (32%) | 16/46 (35%) |
-| + cross-encoder rerank, top-20 pool | 14/27 (52%) | 9/19 (47%) | 23/46 (50%) |
-| + listwise LLM judge, top-20 pool | **19/27 (70%)** | **15/19 (79%)** | **34/46 (74%)** |
-| oracle: answering chunk is in the pool at all | 24/27 (89%) | 17/19 (89%) | — |
+Nineteen of those questions were locked away while the system was built, and never used for any decision.
+Opening the envelope gives this:
 
-The oracle row is the one to read. First-stage retrieval already supplies the answering passage 89% of the
-time, so for a long while the bottleneck was never recall — it was converting a correct candidate list into a
-correct rank 1. The cross-encoder converted about half of what it was given; the listwise judge converts 15 of
-17. That is why the judge, not a bigger embedder, is what ships.
+![](docs/img/held-out.svg)
 
-Enable it when you want it (off by default, no network call when unset):
+Six of nineteen puts the right passage first. Nine when an optional re-reader goes back over the twenty
+candidates it was handed (see the next section). The grey bar is not a result — it is the ceiling: in
+seventeen of the nineteen, the right passage was already sitting in those twenty candidates.
+
+That ceiling is the important number. Search is not failing to *find* things; it is failing to *choose*
+between near-misses. Nearly everything is recoverable, and the hard part is telling the one right passage
+from the nineteen that sound like it.
+
+The twenty-seven questions used while building tell the same story at a different scale:
+
+![](docs/img/dev.svg)
+
+In plain terms: **plain search answers about one question in three, and a second pass over the candidates
+gets you to about one in two.** On the hardest questions — the ones whose detail appears in three passages or
+fewer, so lucky guessing cannot help — plain search is close to useless (2 of 8) and the second pass roughly
+doubles it. This is an honest 5 out of 10, not a victory lap.
+
+If you want the exact figures, the splits, and how each number was produced: [`docs/models.md`](docs/models.md).
+
+## The two optional upgrades, and why they are not the default
+
+Both were built and measured. Neither ships switched on, for different reasons.
+
+**A careful re-read of the candidates** (a cross-encoder, ~570 MB, CPU, no account). It lifts the held-out
+figure from 6 to 9 of 19. It costs a second or two per search and one extra dependency, so it stays an
+optional install rather than the default:
 
 ```bash
-# local model on your own machine — no account, no per-query cost
-export RAG_JUDGE_MODEL=qwen3:4b
+pip install fastembed        # then the snippet in docs/models.md
 ```
 
-**Cost exposure, stated plainly.** A judge runs on *every* search. If the endpoint is hosted, then every
-search — including searches triggered by anyone who can message an agent wired to this archive — becomes a
-billable request on that account. So a non-local `RAG_JUDGE_BASE_URL` is **refused** unless you also set
-`RAG_JUDGE_ALLOW_REMOTE=1`, and the refusal warns on stderr. Default is local-only; opting into remote billing
-is a deliberate act, not an accident of configuration.
+**A model reading all twenty candidates at once and picking the best.** This is the one that actually works
+well — 15 of 19 held out, and 7 of 8 on the hardest questions — but it needs a model with real reasoning
+ability. On a 4 GB graphics card the smallest capable model spills to the processor and takes forty seconds
+a *trivial* turn; a 1.7 B model that does fit scored *worse than plain search* (4 of 19 against 6). So it is
+in this repo as an optional, off-by-default, **local-only** module, and the honest advice is: leave it off
+unless you have a card that fits a 7 B model comfortably.
 
-If the judge errors, times out, or answers unparseably, search returns the retriever's order unchanged. It can
-degrade to the dense baseline; it cannot break search or invent a result.
+```bash
+export RAG_JUDGE_MODEL=<a local model that fits>     # off by default; no network call when unset
+```
 
-Measured and **rejected**, with numbers in [`docs/models.md`](docs/models.md): whole-corpus rank fusion (MRR
-0.512 but hit@8 fell 9/10 → 7/10), centring, whitening, pseudo-relevance feedback, exact-duplicate removal,
-message-level chunking, `mxbai-embed-large`, reranking 50 candidates instead of 20 (46 minutes, ten questions
-unfinished, on CPU), the Qwen3-Embedding-4B rebuild (0.78 docs/s — 2.7 h, and embedder size is the weaker
-lever), and deterministic context headers, which made retrieval **worse** on both splits (dev hit@1 9/23 →
-7/23) because structural boilerplate competes with the content it was meant to situate.
+A hosted model address is refused outright, with no override. The re-read happens on every search, and
+anyone who can message an agent using this archive can trigger a search — so a rented model would mean
+strangers spending your account. Local-only is a safety property here, not a preference.
 
-Write your own `eval/questions.local.json` against your own history. Ten good questions will tell you more
-about this system than any benchmark number borrowed from someone else's archive.
+## Ideas that did not survive being measured
+
+Every one of these was built, run against the same questions, and dropped when it did not help:
+
+![](docs/img/rejected.svg)
+
+- **A short context line above every passage.** This is published advice for exactly the problem we had — a
+  title buried in a long passage — and it made things *worse*: seven fewer questions answered first. Boilerplate
+  repeated across thousands of passages competes with the words that actually matter.
+- **The session's opening topic instead of a full context line.** Still three fewer.
+- **Reading fifty candidates instead of twenty.** One fewer, at roughly three times the cost per search.
+- **Blending the careful scorer's opinion with the original score.** Exactly nothing.
+- **Keyword boosting across the whole corpus.** Two fewer questions found, because a word that appears
+  everywhere outranks the words that appear once.
+- **A bigger embedding model (4B instead of 0.6B).** It raises a ceiling that was not the problem. The
+  answer was already in the twenty candidates most of the time; the missing piece was choosing between them.
 
 ## Known limits
 

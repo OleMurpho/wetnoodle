@@ -176,15 +176,18 @@ class SmokeTest(unittest.TestCase):
             os.environ["RAG_JUDGE_BASE_URL"] = "http://127.0.0.1:9/v1"
             self.assertEqual(judge.rerank("q", hits), hits, "judge outage must not lose results")
 
-            # a hosted endpoint must be refused unless the owner explicitly opts in: a search can be
-            # triggered by anyone who can message the bot, and every call would bill the account
+            # a hosted endpoint is refused with NO override: a search can be triggered by anyone who can
+            # message the bot, so a paid endpoint would let a stranger spend the account's money
             os.environ["RAG_JUDGE_BASE_URL"] = "https://ollama.com/v1"
-            os.environ.pop("RAG_JUDGE_ALLOW_REMOTE", None)
-            self.assertFalse(judge.enabled(), "remote endpoint must be refused by default")
+            self.assertFalse(judge.enabled(), "remote endpoint must be refused")
             self.assertEqual(judge.rerank("q", hits), hits, "refused remote endpoint must not reorder")
-            os.environ["RAG_JUDGE_ALLOW_REMOTE"] = "1"
-            self.assertTrue(judge.enabled(), "explicit opt-in must enable a remote endpoint")
+            os.environ["RAG_JUDGE_ALLOW_REMOTE"] = "1"          # must make no difference
+            self.assertFalse(judge.enabled(), "no flag may enable a paid endpoint")
             os.environ.pop("RAG_JUDGE_ALLOW_REMOTE", None)
+            # local addresses are accepted
+            for local in ("http://127.0.0.1:11434/v1", "http://localhost:11434/v1"):
+                os.environ["RAG_JUDGE_BASE_URL"] = local
+                self.assertTrue(judge.enabled(), "local endpoint must be allowed: %s" % local)
         finally:
             for k, v in saved.items():
                 os.environ.pop(k, None)

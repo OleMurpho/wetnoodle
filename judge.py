@@ -16,12 +16,18 @@ Measured on this repo's 46-question set (same 2,000-chunk corpus, held-out intac
 
 Which judge
 -----------
-Any OpenAI-compatible chat endpoint works, local or hosted. Reasoning models need output budget beyond their
-thinking: with a 700-token cap two of them returned empty content and silently fell back to the retriever.
+A model running on this machine, and only one on this machine. The judge runs on every search, so a hosted
+endpoint would make every search a billable request — and anyone who can message an agent wired to this
+archive can trigger a search. A non-local base URL is refused outright, with no override flag; see config().
 
-    RAG_JUDGE_MODEL=deepseek-v4.1-flash:cloud     # unset (default) = judge off, plain retrieval
-    RAG_JUDGE_BASE_URL=https://ollama.com/v1      # default: the local Ollama's /v1
-    RAG_JUDGE_API_KEY=...                          # omit for a local daemon
+A 1.7B local model was measured and made things *worse* (6/19 -> 4/19): listwise comparison is not a small-
+model task. Use the largest model that fits, and expect a real gap to the hosted numbers above.
+
+Reasoning models need output budget beyond their thinking: with a 700-token cap two of them returned empty
+content and silently fell back to the retriever.
+
+    RAG_JUDGE_MODEL=qwen3:4b                      # unset (default) = judge off, plain retrieval
+    RAG_JUDGE_BASE_URL=http://127.0.0.1:11434/v1  # local only; anything else is refused
     RAG_JUDGE_CANDIDATES=20                        # pool size reordered in one call
     RAG_JUDGE_SNIPPET=1200                         # chars per candidate shown to the judge
     RAG_JUDGE_MAX_TOKENS=2500                      # must exceed the model's reasoning budget
@@ -61,12 +67,12 @@ def config():
         return None
     default_base = (os.environ.get("RAG_OLLAMA") or "http://127.0.0.1:11434").rstrip("/") + "/v1"
     base = (os.environ.get("RAG_JUDGE_BASE_URL") or default_base).rstrip("/")
-    # A hosted endpoint bills per call, and this function is reached by any search — including searches
-    # triggered by people who merely message an agent. So a non-local endpoint is refused unless the owner
-    # has said, explicitly and in writing, that they want that. Default-deny, not default-allow.
-    if not _is_local(base) and os.environ.get("RAG_JUDGE_ALLOW_REMOTE") != "1":
-        _warn_once("RAG_JUDGE_BASE_URL=%s is not local; refusing to call it. Set RAG_JUDGE_ALLOW_REMOTE=1 "
-                   "to accept that every search will be a billable request on that account." % base)
+    # LOCAL ONLY, with no override. The judge runs on every search, so a hosted endpoint would turn every
+    # search into a billable request — including searches triggered by anyone who can message an agent using
+    # this archive. That is charge-by-stranger, and no configuration flag should be able to enable it.
+    if not _is_local(base):
+        _warn_once("RAG_JUDGE_BASE_URL=%s is not a local address; refusing to call it. This kit runs the "
+                   "judge locally only — a hosted model would let any search spend an account's money." % base)
         return None
     return {
         "model": model,

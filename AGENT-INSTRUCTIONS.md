@@ -33,3 +33,18 @@ failure** — `doctor.py` names the fix, so do not improvise alternatives.
   like corruption.
 - Never paste the user's transcripts into a report. Quote a short span, or describe it.
 - Do not add an LLM to the ingestion path. Determinism and zero token cost are the point.
+
+## What this system is actually good at, so you set expectations honestly
+
+Measured on a real 7,674-passage archive with 46 questions (19 of them never used while building): plain
+search puts the right passage first **47%** of the time, and the right passage is somewhere in the top twenty
+**84%** of the time. A cross-encoder second pass takes it to 53%.
+
+So: it is good at *finding* material and mediocre at *ranking* it. Tell the user that, and use it accordingly
+— ask for 5–8 hits and read them, rather than trusting the first one. If someone demands 90% first-hit
+accuracy from a plain vector search on a transcript archive, that is not a tuning problem, it is a
+representation problem, and no knob in this repo fixes it.
+
+Two things that look like improvements and are not, both measured: prepending a context line to each passage
+(**−7 questions**), and reranking a larger candidate pool (**−1 at 3× the cost**). Details and the rest of the
+graveyard: `docs/models.md`.
