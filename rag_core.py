@@ -44,9 +44,27 @@ SCHEMA_VERSION = 2
 # Legacy single-corpus location (kept for messages/paths that predate multi-source).
 STATE_DB = os.path.join(HERMES_HOME, "state.db")
 
-# nomic-embed-text is trained with task prefixes — use them, retrieval improves.
-DOC_PREFIX = "search_document: "
-QUERY_PREFIX = "search_query: "
+# Prefixes are NOT cosmetic: each embedding model was trained with its own convention, and using the wrong
+# one measurably degrades retrieval. So the defaults are chosen per model family, and both are overridable.
+#   nomic-embed-text*            doc "search_document: "   query "search_query: "
+#   qwen3-embedding*             doc (none)                query "Instruct: <task>\nQuery: <q>"
+#   mxbai-embed-large*           doc (none)                query "Represent this sentence for searching relevant passages: "
+#   bge-m3, snowflake-arctic-*   doc (none)                query (none)
+def _prefixes(model):
+    m = model.lower()
+    if m.startswith("nomic"):
+        return "search_document: ", "search_query: "
+    if m.startswith("qwen3-embedding"):
+        return "", ("Instruct: Given a web search query, retrieve relevant passages that answer the query\n"
+                    "Query: ")
+    if m.startswith("mxbai"):
+        return "", "Represent this sentence for searching relevant passages: "
+    return "", ""
+
+
+DOC_PREFIX, QUERY_PREFIX = _prefixes(MODEL)
+DOC_PREFIX = os.environ.get("RAG_DOC_PREFIX", DOC_PREFIX)
+QUERY_PREFIX = os.environ.get("RAG_QUERY_PREFIX", QUERY_PREFIX)
 
 def _skill_roots():
     """Every skill root that exists: <hermes>/skills plus each profile's own skills dir."""
