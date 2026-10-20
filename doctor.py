@@ -20,6 +20,49 @@ OK, WARN, FAIL = "ok  ", "warn", "fail"
 problems = []
 
 
+def _read_text(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
+def machine_shape():
+    """(nproc, ram_gb, is_wsl, affinity) — what the machine looks like from inside the sandbox."""
+    nproc = os.cpu_count() or 1
+    is_wsl = "microsoft" in _read_text("/proc/version").lower()
+    ram_gb = 0.0
+    for line in _read_text("/proc/meminfo").splitlines():
+        if line.startswith("MemTotal:"):
+            ram_gb = round(int(line.split()[1]) / 1048576.0, 1)
+            break
+    try:
+        affinity = len(os.sched_getaffinity(0))
+    except AttributeError:          # macOS
+        affinity = nproc
+    return nproc, ram_gb, is_wsl, affinity
+
+
+def machine_warnings(nproc, ram_gb, is_wsl, affinity):
+    """Pure: the warnings this machine earns. Kept separate so the tests can call it with fake hosts."""
+    out = []
+    if is_wsl:
+        out.append((WARN, "machine shape",
+                    "WSL: %d host thread(s) visible, but this VM owns only %.1f GiB of the host's RAM. "
+                    "An unpinned ingest can starve Windows and crash whatever runs there. Use "
+                    "cron/refresh-with-ollama.sh (it pins to %s at nice 19)."
+                    % (nproc, ram_gb, "0-3")))
+    if nproc > 8 and affinity >= nproc:
+        out.append((WARN, "cpu affinity",
+                    "%d cores and no affinity limit — one embedding request will use all of them. "
+                    "Pin the job: WETNOODLE_CPUS=0-3 ./cron/refresh-with-ollama.sh" % nproc))
+    if ram_gb and nproc / ram_gb > 2.5:
+        out.append((WARN, "core/memory ratio",
+                    "%d cores against %.1f GiB — this host is thread-rich and memory-poor, the shape that "
+                    "saturates first. Keep RAG_NUM_THREADS low." % (nproc, ram_gb)))
+    return out
+
 def report(level, name, detail=""):
     if level == FAIL:
         problems.append(name)
@@ -33,6 +76,15 @@ def main():
     # python
     report(OK if sys.version_info >= (3, 11) else FAIL, "python",
            "%d.%d.%d%s" % (*sys.version_info[:3], "" if sys.version_info >= (3, 11) else " (need 3.11+)"))
+
+    # machine shape: the check that would have prevented the outage report in docs/troubleshooting.md
+    nproc, ram_gb, is_wsl, affinity = machine_shape()
+    report(OK, "machine",
+           "%d core(s), %s GiB%s, affinity %d" % (nproc, ram_gb or "?", ", WSL" if is_wsl else "", affinity))
+    for lvl, name, detail in machine_warnings(nproc, ram_gb, is_wsl, affinity):
+        report(lvl, name, detail)
+    report(OK if core.NUM_THREADS >= 1 else WARN, "embedding threads",
+           "%d per request (RAG_NUM_THREADS), batch %d (RAG_BATCH)" % (core.NUM_THREADS, core.BATCH))
 
     # numpy
     try:

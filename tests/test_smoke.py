@@ -259,5 +259,37 @@ class SmokeTest(unittest.TestCase):
         self.assertTrue(hasattr(m, "rag_open"))
         self.assertTrue(hasattr(m, "rag_audit"))
 
+    def test_13_embedding_requests_are_thread_limited(self):
+        """A single /api/embed call pegged a 20-thread laptop. The request must carry a thread cap."""
+        import rag_core
+        seen = {}
+
+        def fake_post(path, payload, *a, **k):
+            seen["payload"] = payload
+            return {"embeddings": [[0.0] * 8 for _ in payload["input"]]}
+
+        orig = rag_core._post
+        rag_core._post = fake_post
+        try:
+            rag_core._embed_batch(["a", "b"])
+        finally:
+            rag_core._post = orig
+        self.assertEqual(seen["payload"]["options"]["num_thread"], rag_core.NUM_THREADS)
+        self.assertLessEqual(rag_core.NUM_THREADS, 16, "thread cap must actually be a cap")
+        self.assertGreaterEqual(rag_core.NUM_THREADS, 1)
+
+    def test_14_doctor_warns_about_wsl_and_unlimited_affinity(self):
+        """The machine-shape warning is what would have prevented the outage report."""
+        import doctor
+        warns = doctor.machine_warnings(nproc=20, ram_gb=7.6, is_wsl=True, affinity=20)
+        names = [n for _, n, _ in warns]
+        self.assertIn("machine shape", names)
+        self.assertIn("cpu affinity", names)
+        self.assertIn("core/memory ratio", names)
+        text = " ".join(d for _, _, d in warns)
+        self.assertIn("refresh-with-ollama.sh", text)
+        # a quiet, well-proportioned machine earns nothing
+        self.assertEqual(doctor.machine_warnings(8, 32.0, False, 4), [])
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

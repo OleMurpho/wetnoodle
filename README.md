@@ -1,5 +1,18 @@
 # wetnoodle
 
+> ### ⚠️ Experimental software — watch the machine it runs on
+>
+> wetnoodle is a personal project, not a product. It has no support contract, no warranty, and it has
+> already broken a host: on 2026-10-19 a scheduled ingest pinned all 20 threads of a laptop, the WSL VM
+> grew until Windows stopped responding, and the agent gateway on it crashed. Nobody was hurt and nothing
+> was lost, because the owner caught it.
+>
+> **Ingesting is CPU-heavy.** One embedding request can saturate every core it can see. So: run the first
+> index with a monitor open (`top`, Task Manager), keep it on `cron/refresh-with-ollama.sh` (pins the
+> embedder to 4 cores at low priority and stops the daemon afterwards), and do not schedule it more often
+> than every two hours. Read [`docs/troubleshooting.md`](docs/troubleshooting.md#running-on-a-laptop-or-inside-wsl)
+> before putting it on a laptop you need.
+
 A local memory archive for [Hermes Agent](https://hermes-agent.nousresearch.com/docs). It indexes every
 profile's session database — plus every `SKILL.md` you own — into one small vector store, so an agent can
 answer *"what did we decide about X three weeks ago"* instead of only seeing what is still in its context
@@ -56,13 +69,17 @@ Use the **absolute** interpreter path; a system `python` has no `numpy` or `mcp`
 start a new session) and three tools appear: `rag_search`, `rag_open`, `rag_audit`.
 
 ```bash
-# 5. Keep it current — every 30 minutes, silent unless it fails
-*/30 * * * * /absolute/path/to/wetnoodle/cron/rag-refresh.sh
+# 5. Keep it current — every two hours, off the hour, silent unless it fails
+17 */2 * * * /absolute/path/to/wetnoodle/cron/refresh-with-ollama.sh
 ```
 
-In Hermes you can schedule the same script with the `cronjob` tool instead of crontab.
+`refresh-with-ollama.sh` is the one to schedule: it starts Ollama pinned to four cores at nice 19, runs the
+refresh under the same limits, and stops the daemon afterwards. Set `WETNOODLE_CPUS` if four is wrong for
+your machine. In Hermes you can schedule the same script with the `cronjob` tool instead of crontab.
 
-**If something is wrong**, `./.venv/bin/python doctor.py` preflights every dependency and prints the fix.
+**If something is wrong**, `./.venv/bin/python doctor.py` preflights every dependency and prints the fix —
+including whether this machine is the thread-rich, memory-poor shape that saturates (it will tell you if you
+are inside WSL, and whether anything is capping core count).
 Less common problems are in [`docs/troubleshooting.md`](docs/troubleshooting.md).
 
 ## How a search actually works
@@ -133,7 +150,8 @@ seventeen times.
 | `python eval_recall.py --verify-markers` | is each eval marker actually present? |
 | `python export_store.py --corpus X --out f.jsonl` | corpus → text (portable, diffable) |
 | `python import_store.py f.jsonl --corpus peer` | text → corpus (re-embedded locally) |
-| `python doctor.py` | preflight every dependency |
+| `python doctor.py` | preflight every dependency, and warn about machine shape |
+| `./cron/refresh-with-ollama.sh` | pinned, low-priority refresh (the one to schedule) |
 | `python -E -m unittest discover -s tests -q` | smoke test, no Ollama needed (`-E` ignores a stray `PYTHONPATH`) |
 
 ## Settings
@@ -149,6 +167,8 @@ Defaults are right for almost everyone. These relocate the store; they are not a
 | `RAG_SKILLS_DIRS` | discovered | override skill roots (`:`-separated) |
 | `RAG_MAX_HIT_CHARS` | `800` | per-hit cap in tool output |
 | `RAG_MAX_TOTAL_CHARS` | `6000` | cap across the whole result set |
+| `RAG_NUM_THREADS` | `min(4, nproc)` | threads Ollama may use **per embedding request** |
+| `RAG_BATCH` | `16` | passages per request; smaller means shorter load spikes |
 
 The scoring knobs behind these (`RAG_HYBRID`, `RAG_VEC_WEIGHT`, per-corpus quotas, model prefixes) are in
 [`docs/models.md`](docs/models.md) with the measurement that settled each. Every one is measured worse or

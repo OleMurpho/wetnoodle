@@ -42,7 +42,23 @@ MAX_MSG_CHARS = int(os.environ.get("RAG_MAX_MSG_CHARS", "20000"))
 RAG_DB = os.path.join(RAG_DIR, "rag.db")
 OLLAMA = os.environ.get("RAG_OLLAMA", "http://127.0.0.1:11434")
 MODEL = os.environ.get("RAG_EMBED_MODEL", "nomic-embed-text")  # pins vector dim: changing it needs --full
-BATCH = 32
+# --- politeness knobs ------------------------------------------------------ #
+# A default ingest saturated a 20-thread laptop and took its agent host down (see
+# docs/troubleshooting.md, "Running on a laptop or inside WSL"). Ollama spreads a single
+# embedding request across every core it can see and at normal priority, so the request that
+# pegs the machine is one call, not many. These two settings are the client-side brake:
+#
+#   RAG_NUM_THREADS  threads Ollama may use per request. Default min(4, nproc): enough to keep
+#                    throughput sane, few enough to leave the host interactive.
+#   RAG_BATCH        passages per request. Smaller batches mean shorter bursts of load.
+#
+# Neither changes the vectors: thread count affects speed, never the numbers.
+def _default_threads():
+    return max(1, min(4, os.cpu_count() or 4))
+
+
+BATCH = int(os.environ.get("RAG_BATCH", "16"))
+NUM_THREADS = int(os.environ.get("RAG_NUM_THREADS", "0") or 0) or _default_threads()
 SCHEMA_VERSION = 2
 
 # Legacy single-corpus location (kept for messages/paths that predate multi-source).
@@ -213,7 +229,8 @@ def _embed_batch(texts, tries=3):
     last = None
     for i in range(tries):
         try:
-            d = _post("/api/embed", {"model": MODEL, "input": texts})
+            d = _post("/api/embed", {"model": MODEL, "input": texts,
+                                     "options": {"num_thread": NUM_THREADS}})
             embs = d.get("embeddings")
             if not embs:
                 raise ValueError(f"no embeddings in response, keys={list(d)[:6]}")

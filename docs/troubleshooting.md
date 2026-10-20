@@ -38,6 +38,51 @@ Truncated text doesn't error — it embeds the prefix, so two documents differin
 cosine ≈ 1.0. Chunks here are capped at 1,200 characters (~500 tokens), well inside the limit; if you raise
 the cap, measure the token count first, character count is not a proxy for it.
 
+## Running on a laptop, or inside WSL
+
+**The failure, measured.** On 2026-10-19 an ordinary install on a 13th-gen i7 laptop (20 threads, 7.6 GiB given
+to the WSL2 VM) ran its scheduled refresh at 22:00. The embedding pass took every core at normal priority,
+`VmmemWSL` ballooned, CPU sat at 100 %, Windows stopped responding, and the Hermes gateway on the host
+hard-crashed. Recovery was manual: pause the job, `pkill -f "ollama serve"`, cap `VmmemWSL` affinity to 4 cores
+in Task Manager. Load average right after the crash was 1.73 / 3.47 / 1.84 on a machine that should idle at 0.1.
+
+The corpus was **1,083 chunks**. This is not a big-archive problem; it is a default-behaviour problem. Ollama
+spreads one embedding request across every core it can see, and a VM reports all of the host's threads while
+owning only part of its memory.
+
+**What to run instead.** Never point cron at `ingest.py`, and prefer the wrapper:
+
+```bash
+17 */2 * * * /path/to/wetnoodle/cron/refresh-with-ollama.sh
+```
+
+It starts Ollama itself with `OLLAMA_NUM_PARALLEL=1`, pinned to `WETNOODLE_CPUS` (default `0-3`) at
+`WETNOODLE_NICE` (default 19), runs the refresh under the same pin, and stops the daemon afterwards. Plain
+`cron/rag-refresh.sh` also pins itself before doing any work, so a hand-run is polite too. Inside the ingest,
+`RAG_NUM_THREADS` (default `min(4, nproc)`) caps threads per request and `RAG_BATCH` (default 16) caps passages
+per request.
+
+**Check before you schedule.** `python doctor.py` now reports the shape of the machine and warns when it is
+thread-rich and memory-poor, when it is WSL, and when nothing caps affinity:
+
+```
+[ok  ] machine: 12 core(s), 15.5 GiB, WSL, affinity 12
+[warn] machine shape: WSL: 12 host thread(s) visible, but this VM owns only 15.5 GiB ...
+[warn] cpu affinity: 12 cores and no affinity limit — one embedding request will use all of them.
+```
+
+**If the host is already unresponsive.** From another terminal: pause the cron job, then
+`pkill -f "ollama serve"`, then re-run under the pin:
+`taskset -c 0-3 nice -n 19 ./cron/rag-refresh.sh`. On Windows, capping `VmmemWSL` affinity in Task Manager
+buys you the seconds you need to get a terminal.
+
+**Cadence.** Two hours, not thirty minutes. Nothing in the design needs half-hourly freshness — the archive is
+read, not watched — and every extra run is another chance to catch the machine at load. A refresh is ~70 s per
+1,000 new chunks, so a two-hourly job that usually finds nothing is nearly free.
+
+**GPU is not yet the answer.** Moving the embedder to a GPU may be the real fix, but it has not been measured on
+a host with a competing GPU workload, and VRAM is shared. Until someone measures it, the pin is the fix.
+
 ## Search returns nothing
 
 In order: the index is empty (`ingest.py --status`), the query dim disagrees with the store (above), or the
