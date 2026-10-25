@@ -1,5 +1,12 @@
 # wetnoodle
 
+> ### Requirements — you need **both** Hermes Agent and Ollama
+>
+> This is not a standalone app. It reads Hermes Agent's own session databases (there is nothing to index
+> without Hermes), and it embeds with a **local Ollama** model (there is no fallback and no cloud API).
+> Minimum: Hermes Agent with at least one profile, Ollama running locally, and `nomic-embed-text` pulled.
+> Python 3.11+ is the third piece. If you have only one of the two, stop here — it will ingest nothing.
+
 > ### ⚠️ Experimental software — watch the machine it runs on
 >
 > wetnoodle is a personal project, not a product. It has no support contract, no warranty, and it has
