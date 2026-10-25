@@ -34,6 +34,20 @@ you ──▶ skills (*/SKILL.md) ───────────────�
                                              agent (MCP tool) / query.py ◀── search ───┘
 ```
 
+## Credit where it's due
+
+Two ideas here were borrowed after a head-to-head test against
+[**mnemosyne-oss/mnemosyne**](https://github.com/mnemosyne-oss/mnemosyne) (MIT), which stores memories
+with an importance score and retires a superseded fact instead of ranking it beside its replacement:
+
+- `chunks.importance` and the `RAG_IMPORTANCE_WEIGHT` nudge (off by default — no measurement yet justifies it)
+- `superseded_by` / `superseded_at` and `supersede()` (on by default; a correction stops competing with the thing it corrects)
+
+Their implementation is far broader — Bilevel Episodic-Associative Memory, temporal knowledge-graph
+version chains, binarised vectors. Ours is two nullable columns and a filter. On the same 46-question
+harness against the same archive the two stores tied (ΔMRR +0.011, 95 % CI −0.146…+0.170), so credit
+here is for a design that is *more correct*, not for numbers we could not reproduce.
+
 ## Start here
 
 **You need all three.** Python 3.11+, a local Ollama daemon, and the `nomic-embed-text` model.
