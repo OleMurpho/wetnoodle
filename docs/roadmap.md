@@ -82,6 +82,28 @@ another sweep.
 zero behavioural gain; it defaults to 0.5 and the weight stays 0.0, so it is inert. That is a
 compromise, stated rather than hidden.
 
+## The fresh held-out set (2026-10-25)
+
+`~/rag_memory/eval/questions.fresh.json` — 32 questions, **report only, never tuned against**.
+
+Construction, so it can be repeated honestly:
+1. Pool = every chunk whose session is not the tuning session and whose text is >= 320 chars.
+2. Random sample, seed 42 — no hand-picking of questions whose answers were already known.
+3. One question per sampled chunk, written to be answered *by* that chunk, with a short
+   marker string as the answer.
+4. Mechanical validation, not judgement: every marker must appear in its target chunk, must
+   appear in **at most 6** chunks archive-wide (or it cannot prove which chunk answered), and
+   must not leak into the question text. Eight markers failed the first rule and were tightened
+   to rarer phrases before the set was frozen.
+
+Not committed to this repository: the markers name private projects, hosts and paths.
+
+**Reference baseline (default settings, live index): MRR 0.454, hit@1 12/32, hit@8 20/32.**
+
+That is *below* dev (0.465) and well below the old held-out set (0.591), which confirms the
+suspicion that the older sets had been tuned into being easy. From here, a change is worth
+keeping only if it moves this number, not the old ones.
+
 ## Protocol
 1. Branch, off by default or kill criterion attached.
 2. Dev sweep (27 questions). Only the winner proceeds.
