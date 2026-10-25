@@ -42,6 +42,7 @@ with an importance score and retires a superseded fact instead of ranking it bes
 
 - `chunks.importance` and the `RAG_IMPORTANCE_WEIGHT` nudge (off by default — no measurement yet justifies it)
 - `superseded_by` / `superseded_at` and `supersede()` (on by default; a correction stops competing with the thing it corrects)
+- Successor forwarding (`RAG_SUCCESSOR_BOOST`, default 1.0, our own addition — not theirs): a correction inherits the standing of the claim it retired, but only for queries that matched that claim. Measured on the HVAC case: retiring the wrong answer alone left the correction at rank 6 of 8; with forwarding it is rank 1, and two unrelated queries were unchanged.
 
 Their implementation is far broader — Bilevel Episodic-Associative Memory, temporal knowledge-graph
 version chains, binarised vectors. Ours is two nullable columns and a filter. On the same 46-question

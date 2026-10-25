@@ -160,6 +160,8 @@ HYBRID = os.environ.get("RAG_HYBRID", "1").strip() not in ("0", "false", "no", "
 # Applied centred on 0.5 so it can only reorder: score = cosine + W * (importance - 0.5).
 # Default 0.0 = OFF. Enabling it without a measured win would be a vibes change.
 IMPORTANCE_WEIGHT = float(os.environ.get("RAG_IMPORTANCE_WEIGHT", "0.0") or 0.0)
+# How much standing a corrector inherits from the chunk it retired. 0.0 = off.
+SUCCESSOR_BOOST = float(os.environ.get("RAG_SUCCESSOR_BOOST", "1.0") or 0.0)
 VEC_WEIGHT = float(os.environ.get("RAG_VEC_WEIGHT", "0.7"))  # vector share of the rerank blend
 # Fair representation across corpora. A generic query ("Unity CLI executable") scores a little higher in
 # the biggest corpora, so chunks of 2,780 default-profile messages push the answering chunk of a 782-chunk
@@ -600,6 +602,22 @@ def search(query, k=8, corpus=None, hybrid=None, include_superseded=False,
         live = np.fromiter((m.get("superseded_by") is None for m in meta),
                            dtype=bool, count=len(meta))
         if not live.all():
+            # Successor forwarding: retiring a stale answer otherwise just promotes the chatter that
+            # surrounded it, so a correction inherits its predecessor's standing -- but only when this
+            # query actually matched the retired claim (pre-mask score), or every correction would sit
+            # permanently at the top of every unrelated search.
+            if SUCCESSOR_BOOST:
+                raw = scores
+                ids = np.fromiter((m["id"] for m in meta), dtype=np.int64, count=len(meta))
+                pos = {int(v): i for i, v in enumerate(ids)}
+                for i, m in enumerate(meta):
+                    succ = m.get("superseded_by")
+                    if succ is None or int(succ) not in pos:
+                        continue
+                    inherited = float(raw[i])
+                    if inherited > 0.0:
+                        j = pos[int(succ)]
+                        scores[j] = max(float(scores[j]), inherited * SUCCESSOR_BOOST)
             scores = np.where(live, scores, -np.inf)
 
     if corpus:
