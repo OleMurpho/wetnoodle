@@ -90,6 +90,24 @@ for p in "${profiles[@]}"; do
         "$HERMES_BIN" -p "$p" config set memory.wetnoodle.corpora "$scope_value" --force >/dev/null 2>&1 || cfg_ok=0
         "$HERMES_BIN" -p "$p" config set memory.wetnoodle.exclude_corpora "" --force >/dev/null 2>&1 || cfg_ok=0
     fi
+    if [ -n "${RAG_EXCLUDE_SHARED:-}" ] && [ -z "${RAG_ALLOWED_CORPORA:-}" ]; then
+        # Same rule as register-mcp.sh --scope-shared: hide the other profiles' transcripts,
+        # keep every shared corpus.
+        exclude_list=""
+        peers=()
+        for d in "$HERMES_HOME"/profiles/*/; do [ -d "$d" ] && peers+=("$(basename "$d")"); done
+        [ "${#peers[@]}" -gt 0 ] || peers=("${profiles[@]}")
+        for other in "${peers[@]}"; do
+            [ "$other" = "$p" ] && continue
+            exclude_list="$exclude_list,$other"
+        done
+        exclude_list="${exclude_list#,}"
+        "$HERMES_BIN" -p "$p" config set memory.wetnoodle.corpora "" --force >/dev/null 2>&1 || cfg_ok=0
+        if [ -n "$exclude_list" ]; then
+            "$HERMES_BIN" -p "$p" config set memory.wetnoodle.exclude_corpora "$exclude_list" \
+                --force >/dev/null 2>&1 || cfg_ok=0
+        fi
+    fi
     if [ "$cfg_ok" -eq 1 ]; then
         echo "  $p: linked, provider=wetnoodle, store=$DB_DIR"
     else

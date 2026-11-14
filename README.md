@@ -125,10 +125,15 @@ its own corpus name, and by default every profile can read all of them: pre-turn
 happily surface another's private conversation. Both halves of the integration take a scope:
 
 ```bash
-./scripts/register-mcp.sh --scope                    # MCP: <profile>, skill, notes
-./scripts/install-memory-provider.sh --scope         # provider: same allowlist
-./scripts/register-mcp.sh --allow default,skill      # or one explicit list for everyone
+./scripts/register-mcp.sh --scope-shared             # read everything except other profiles
+RAG_EXCLUDE_SHARED=1 ./scripts/install-memory-provider.sh --scope-shared
+./scripts/register-mcp.sh --scope                    # strict: own corpus, skill, notes only
 ```
+
+`--scope-shared` is the one most installs want: skills, imported manuals and notes stay
+reachable, and the only thing hidden is the transcripts of the other agents. It leaves the
+base install's `default` corpus visible, because that is usually the longest history on the
+machine; `--scope` is the strict form when you do want it closed.
 
 The scope is enforced inside search and inside `rag_open`, not by filtering results afterwards, so `k`
 is spent on chunks the caller is allowed to see. A ref from outside the scope is reported as missing

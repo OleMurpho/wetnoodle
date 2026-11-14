@@ -13,7 +13,8 @@
 #
 #   ./scripts/register-mcp.sh                 # every profile found
 #   ./scripts/register-mcp.sh work personal   # only the ones named
-#   ./scripts/register-mcp.sh --scope         # each profile may read its own corpus, skills, notes
+#   ./scripts/register-mcp.sh --scope-shared  # read everything except other profiles' transcripts
+#   ./scripts/register-mcp.sh --scope         # strict: own corpus, skills, notes only
 #   ./scripts/register-mcp.sh --allow a,b     # one explicit allowlist for every profile
 #
 # Every profile shares one store, so without a scope each agent can read every other
@@ -51,10 +52,12 @@ echo "  python    : $PY_BIN"
 echo "  hermes    : $HERMES_BIN"
 
 SCOPE=""
+SHARED=""
 ALLOW="${RAG_ALLOWED_CORPORA:-}"
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --scope) SCOPE=1; shift ;;
+        --scope-shared) SHARED=1; shift ;;
         --allow) ALLOW="${2:-}"; shift 2 ;;
         --allow=*) ALLOW="${1#*=}"; shift ;;
         *) break ;;
@@ -96,6 +99,31 @@ for p in $TARGETS; do
         note="store=$RAG_DIR"
     fi
     scope_value="$ALLOW"
+    exclude_value=""
+    if [ -n "$SHARED" ] && [ -z "$scope_value" ]; then
+        # Corpora are named after the profile that owns them, so excluding the other profile
+        # names hides their transcripts while every shared corpus — skills, imported manuals,
+        # notes — stays reachable.
+        # every profile on the machine, not only the ones named on this command line:
+        # `default` owns a corpus too, and passing two names would leave it readable
+        # Named profiles only. `default` is the base install: hiding it by default would cut
+        # every profile off from the longest-running history on the machine. Use --scope (or
+        # add it to the exclusion yourself) when that is what you want.
+        peers=$(for d in "$PROFILES_DIR"/*/; do [ -d "$d" ] && basename "$d"; done)
+        for other in $peers; do
+            [ "$other" = "$p" ] && continue
+            exclude_value="$exclude_value,$other"
+        done
+        exclude_value="${exclude_value#,}"
+        # clear any allowlist left by an earlier --scope run, or the two rules combine into
+        # the stricter of the two and every newly ingested shared corpus stays invisible
+        "$HERMES_BIN" -p "$p" config set mcp_servers.wetnoodle.env.RAG_ALLOWED_CORPORA "" >/dev/null 2>&1
+        if [ -n "$exclude_value" ]; then
+            "$HERMES_BIN" -p "$p" config set mcp_servers.wetnoodle.env.RAG_EXCLUDED_CORPORA \
+                "$exclude_value" >/dev/null 2>&1 || echo "  $p: warning — could not set exclusion"
+            note="$note reading everything except: $exclude_value"
+        fi
+    fi
     if [ -z "$scope_value" ] && [ -n "$SCOPE" ]; then
         scope_value="$p,skill,notes"
     fi
