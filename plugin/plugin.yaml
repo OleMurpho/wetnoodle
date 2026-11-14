@@ -1,0 +1,3 @@
+name: wetnoodle
+version: 1.0.0
+description: "wetnoodle — read-only pre-turn retrieval over the local wetnoodle archive."

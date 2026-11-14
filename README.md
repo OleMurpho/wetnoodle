@@ -82,6 +82,7 @@ are inside WSL, and whether anything is capping core count). Less common problem
 
 ```
 wetnoodle/        the package: rag_core and render, plus one module per command
+plugin/           the optional Hermes memory provider (pre-turn recall)
 scripts/          bootstrap, MCP registration, hygiene gate, chart rendering, sweeps
 scripts/cron/     the two refresh scripts
 tests/            smoke tests, no Ollama required
@@ -95,6 +96,32 @@ Commands are modules, run from the repository root:
 ./.venv/bin/python -m wetnoodle.ingest --status
 ./.venv/bin/python -m wetnoodle.query "the hostname of the bot machine"
 ```
+
+## Optional — make it the agent's memory
+
+The MCP tools only work when the model decides to look. The memory provider does not wait to be asked:
+before each turn it searches the archive with the user's own message and injects whatever clears a score
+floor, and it adds a `memory_search` tool for the cases the injection misses.
+
+```bash
+./scripts/install-memory-provider.sh            # every profile it finds
+./scripts/install-memory-provider.sh work       # or only the ones you name
+./scripts/install-memory-provider.sh --remove   # unlink again
+```
+
+It symlinks `plugin/` into `<profile>/plugins/wetnoodle` rather than copying it, so the profile never becomes
+a second, drifting copy of the code, and it sets the three keys the provider needs:
+
+| Key | Value | Why |
+|---|---|---|
+| `memory.provider` | `wetnoodle` | selects this provider |
+| `memory.wetnoodle.repo` | the checkout | where `wetnoodle/rag_core.py` lives |
+| `memory.wetnoodle.db_dir` | the store | which archive is read — it defaults to `~/.wetnoodle`, which is not always the one the MCP tools serve |
+
+Injection is gated: a passage is only injected when it clears `score_floor` (0.62 by default) and, if set, a
+margin over the next candidate, so most turns add nothing. Writes still go through the core memory tool and
+are mirrored into the archive, so `MEMORY.md` stays the file you can read and edit by hand. Restart the
+gateway after installing; `hermes -p <profile> memory status` says whether it loaded.
 
 ## How a search works
 
