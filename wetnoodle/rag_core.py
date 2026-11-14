@@ -126,7 +126,7 @@ def discover_sources():
     # Imported session databases from OTHER machines. Drop a copy at imports/<name>/state.db and it
     # becomes corpus "import_<name>"; keeping it out of HERMES_HOME/profiles means a multiplexed gateway
     # never mistakes it for a servable profile. Prefer export_store.py/import_store.py (text, no db copy).
-    imports_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "imports")
+    imports_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "imports")
     if os.path.isdir(imports_dir):
         for name in sorted(os.listdir(imports_dir)):
             p = os.path.join(imports_dir, name, "state.db")

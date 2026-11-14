@@ -16,7 +16,7 @@ def main():
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
-    import rag_core as core
+    from . import rag_core as core
     try:
         hits = core.search(args.query, k=args.k, corpus=args.corpus or None)
     except ValueError as e:
@@ -43,7 +43,7 @@ def main():
         return (f"{i:2d}. [{h['score']:.3f}] {date} | {h.get('corpus','?')} | {h['session_id']} | "
                 f"{h['role']} | src={h['source']}\n    " + body.replace("\n", " ⏎ "))
 
-    import render
+    from . import render
     blocks, shown, available, _ = render.bounded(hits, header=header, hit_chars=500)
     print(f"query: {args.query!r}  ({available} hits)\n" + "-" * 72)
     print("\n".join(blocks) + render.note(shown, available))

@@ -10,15 +10,15 @@ failure** — `doctor.py` names the fix, so do not improvise alternatives.
    Ollama daemon, pulls `nomic-embed-text`, runs `doctor.py`, and does a first ingest. It is idempotent.
 4. **Read `doctor.py` output, not the exit code alone.** Every `[fail]` line carries its own remedy. A `[warn]`
    on `session corpora` means no Hermes sessions were found — check the path before continuing.
-5. **Verify the ingest.** `python ingest.py --status` must show `chunks > 0` and one corpus per profile that
+5. **Verify the ingest.** `python -m wetnoodle.ingest --status` must show `chunks > 0` and one corpus per profile that
    has a `state.db`. A corpus tagged frozen means its source database was deleted; leave it.
-6. **Search once, for real.** `python query.py "<a phrase you know is in the history>"`. If it returns
+6. **Search once, for real.** `python -m wetnoodle.query "<a phrase you know is in the history>"`. If it returns
    nothing, stop: the index is empty or the model is wrong, and every later step will lie to you.
 7. **Run the smoke test.** `python -E -m unittest discover -s tests -q`. It needs no Ollama and proves discover → chunk →
    store → search → render → export/import. If it fails, the install is broken, not the archive.
 8. **Write eval questions before claiming quality.** Copy `eval/questions.example.json` to
    `eval/questions.local.json` and replace it with 8–10 questions about *this* archive, each with a marker you
-   verified with `--verify-markers`. Then run `python eval_recall.py`. Report the MRR you measured — do not
+   verified with `--verify-markers`. Then run `python -m wetnoodle.eval_recall`. Report the MRR you measured — do not
    report the README's number as if it were theirs.
 9. **Register the MCP server** using the absolute path to `.venv/bin/python` (see README). Tell the user a
    gateway restart or a new session is needed before the tools appear; do not restart it yourself.

@@ -30,7 +30,7 @@ import sqlite3
 import sys
 import time
 
-import rag_core as core
+from . import rag_core as core
 
 
 def skill_roots():

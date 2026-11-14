@@ -13,8 +13,7 @@ import sys
 import urllib.error
 import urllib.request
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import rag_core as core
+from . import rag_core as core
 
 OK, WARN, FAIL = "ok  ", "warn", "fail"
 problems = []
@@ -51,12 +50,12 @@ def machine_warnings(nproc, ram_gb, is_wsl, affinity):
         out.append((WARN, "machine shape",
                     "WSL: %d host thread(s) visible, but this VM owns only %.1f GiB of the host's RAM. "
                     "An unpinned ingest can starve Windows and crash whatever runs there. Use "
-                    "cron/refresh-with-ollama.sh (it pins to %s at nice 19)."
+                    "scripts/cron/refresh-with-ollama.sh (it pins to %s at nice 19)."
                     % (nproc, ram_gb, "0-3")))
     if nproc > 8 and affinity >= nproc:
         out.append((WARN, "cpu affinity",
                     "%d cores and no affinity limit — one embedding request will use all of them. "
-                    "Pin the job: WETNOODLE_CPUS=0-3 ./cron/refresh-with-ollama.sh" % nproc))
+                    "Pin the job: WETNOODLE_CPUS=0-3 ./scripts/cron/refresh-with-ollama.sh" % nproc))
     if ram_gb and nproc / ram_gb > 2.5:
         out.append((WARN, "core/memory ratio",
                     "%d cores against %.1f GiB — this host is thread-rich and memory-poor, the shape that "

@@ -19,7 +19,7 @@ environment without breaking sibling imports. `cron/rag-refresh.sh` gets this ri
 ## `dim mismatch` after everything worked yesterday
 
 `RAG_EMBED_MODEL` changed. The model pins the vector dimension (768 for `nomic-embed-text`), so old and new
-vectors cannot be compared. Either set the old model back or rebuild: `python ingest.py --full`.
+vectors cannot be compared. Either set the old model back or rebuild: `python -m wetnoodle.ingest --full`.
 
 ## `database is locked`
 
@@ -62,7 +62,7 @@ It starts Ollama itself with `OLLAMA_NUM_PARALLEL=1`, pinned to `WETNOODLE_CPUS`
 `RAG_NUM_THREADS` (default `min(4, nproc)`) caps threads per request and `RAG_BATCH` (default 16) caps passages
 per request.
 
-**Check before you schedule.** `python doctor.py` now reports the shape of the machine and warns when it is
+**Check before you schedule.** `python -m wetnoodle.doctor` now reports the shape of the machine and warns when it is
 thread-rich and memory-poor, when it is WSL, and when nothing caps affinity:
 
 ```

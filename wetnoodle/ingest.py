@@ -23,7 +23,7 @@ import json
 import sys
 import time
 
-import rag_core as core
+from . import rag_core as core
 
 
 def status():

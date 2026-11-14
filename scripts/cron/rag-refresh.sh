@@ -20,25 +20,25 @@ elif [ -z "${WETNOODLE_LIMITED:-}" ] && command -v nice >/dev/null 2>&1; then
 fi
 
 RAG_DIR="${RAG_DIR:-$HOME/.wetnoodle}"
-[ -d "$RAG_DIR" ] || RAG_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SRC="${WETNOODLE_SRC:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
 # Job runtime isolation. A cron job inherits the environment of whatever launched it, and a host process
 # may export PYTHONPATH for its own interpreter. Left alone, that makes this venv import a foreign numpy
 # and die with an ABI error that looks like corruption. Clear it, choose the interpreter explicitly, and
-# run with -E -s. NOT -I: it implies -P, which stops prepending the script's own directory, so the
-# sibling `import rag_core` fails with ModuleNotFoundError.
+# run with -E -s. NOT -I: it implies -P, which stops prepending the working directory, so `-m wetnoodle`
+# would no longer resolve.
 unset PYTHONPATH PYTHONHOME
-PY="${RAG_PYTHON:-$RAG_DIR/.venv/bin/python}"
+PY="${RAG_PYTHON:-$SRC/.venv/bin/python}"
 
-cd "$RAG_DIR" || { echo "rag-refresh: cannot cd to $RAG_DIR"; exit 1; }
+cd "$SRC" || { echo "rag-refresh: cannot cd to $SRC"; exit 1; }
 [ -x "$PY" ] || { echo "rag-refresh: python missing at $PY (set RAG_PYTHON)"; exit 1; }
 "$PY" -I -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null \
   || { echo "rag-refresh: $PY is not Python 3.11+ (set RAG_PYTHON)"; exit 1; }
 
-out=$("$PY" -E -s ingest.py 2>&1); rc=$?
+out=$("$PY" -E -s -m wetnoodle.ingest 2>&1); rc=$?
 [ $rc -ne 0 ] && { echo "rag-refresh: session ingest failed (rc=$rc)"; echo "$out"; exit $rc; }
 
-out=$("$PY" -E -s ingest_skills.py 2>&1); rc=$?
+out=$("$PY" -E -s -m wetnoodle.ingest_skills 2>&1); rc=$?
 [ $rc -ne 0 ] && { echo "rag-refresh: skill ingest failed (rc=$rc)"; echo "$out"; exit $rc; }
 
 exit 0

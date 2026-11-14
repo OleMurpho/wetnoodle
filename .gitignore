@@ -16,3 +16,5 @@ __pycache__/
 
 # generated per install by scripts/register-mcp.sh
 bin/
+
+.pytest_cache/

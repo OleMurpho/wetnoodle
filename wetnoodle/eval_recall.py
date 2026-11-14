@@ -26,7 +26,6 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
 def load(path):
@@ -52,7 +51,7 @@ def verify_markers(questions, core):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--questions", default=os.path.join(os.path.dirname(os.path.abspath(__file__)),
+    ap.add_argument("--questions", default=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                                         "eval", "questions.local.json"))
     ap.add_argument("--k", type=int, default=8)
     ap.add_argument("--min-mrr", type=float, default=0.45)
@@ -60,7 +59,7 @@ def main():
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
 
-    import rag_core as core
+    from . import rag_core as core
     questions = load(a.questions)
 
     if a.verify_markers:

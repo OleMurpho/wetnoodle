@@ -46,7 +46,7 @@ because it is the correct estimator, not because it was measured to win.
 
 - Default `nomic-embed-text`: fastest on CPU, smallest vectors, adequate for "what did we discuss" recall.
 - Switch to `qwen3-embedding:0.6b` when precise-fact recall matters more than indexing speed:
-  `RAG_EMBED_MODEL=qwen3-embedding:0.6b` then `python ingest.py --full`.
+  `RAG_EMBED_MODEL=qwen3-embedding:0.6b` then `python -m wetnoodle.ingest --full`.
 - Above 0.6B the CPU cost becomes impractical (4B ≈ 1 doc/s, hours per rebuild); at that point the honest
   alternative is a cross-encoder reranker over the top-20 rather than a bigger embedder.
 - If you change model, delete the old `rag.db` rather than mixing: a dimension mismatch surfaces as

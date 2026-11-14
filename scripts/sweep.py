@@ -16,7 +16,7 @@ import os
 import random
 import statistics
 
-import rag_core as core
+from wetnoodle import rag_core as core
 
 SETS = {
     "fresh": os.path.expanduser("~/rag_memory/eval/questions.fresh.json"),

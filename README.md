@@ -47,11 +47,11 @@ here, so a few thousand messages take a couple of minutes. You should end with a
 
 ```bash
 # 3. Prove it works — ask for something you know is in your history
-./.venv/bin/python query.py "the hostname of the machine that runs the bot"
+./.venv/bin/python -m wetnoodle.query "the hostname of the machine that runs the bot"
 ```
 
 A good result names the passage, its date, its profile and its score. If it says *no hits*, the index is
-empty — run `python doctor.py`, which names the exact fix.
+empty — run `python -m wetnoodle.doctor`, which names the exact fix.
 
 ```bash
 # 4. Let an existing Hermes agent use it
@@ -66,17 +66,35 @@ YAML, and re-running it is safe. Restart the gateway or start a new session, and
 
 ```bash
 # 5. Keep it current — every two hours, off the hour, silent unless it fails
-17 */2 * * * /absolute/path/to/wetnoodle/cron/refresh-with-ollama.sh
+17 */2 * * * /absolute/path/to/wetnoodle/scripts/cron/refresh-with-ollama.sh
 ```
 
 `refresh-with-ollama.sh` is the one to schedule: it starts Ollama pinned to four cores at nice 19, runs the
 refresh under the same limits, and stops the daemon afterwards. Set `WETNOODLE_CPUS` if four is wrong for
 your machine. In Hermes you can schedule the same script with the `cronjob` tool instead of crontab.
 
-**If something is wrong**, `./.venv/bin/python doctor.py` preflights every dependency and prints the fix —
+**If something is wrong**, `./.venv/bin/python -m wetnoodle.doctor` preflights every dependency and prints the fix —
 including whether this machine is the thread-rich, memory-poor shape that saturates (it will tell you if you
 are inside WSL, and whether anything is capping core count). Less common problems are in
 [`docs/troubleshooting.md`](docs/troubleshooting.md).
+
+## Repository layout
+
+```
+wetnoodle/        the package: rag_core and render, plus one module per command
+scripts/          bootstrap, MCP registration, hygiene gate, chart rendering, sweeps
+scripts/cron/     the two refresh scripts
+tests/            smoke tests, no Ollama required
+eval/             question sets for eval_recall.py
+docs/             troubleshooting, model notes, roadmap, and the README images
+```
+
+Commands are modules, run from the repository root:
+
+```bash
+./.venv/bin/python -m wetnoodle.ingest --status
+./.venv/bin/python -m wetnoodle.query "the hostname of the bot machine"
+```
 
 ## How a search works
 
@@ -108,18 +126,18 @@ answer of its own. Exact method and numbers: [`docs/models.md`](docs/models.md).
 
 | Command | What it does |
 |---|---|
-| `python ingest.py` | incremental ingest of every session corpus |
-| `python ingest.py --status` | per-corpus counts and watermarks |
-| `python ingest.py --full` | rebuild available corpora from scratch |
-| `python ingest.py --purge-missing` | drop corpora whose source database is gone |
-| `python ingest_skills.py` | index every `SKILL.md` |
-| `python query.py "text" [-k N] [--corpus C]` | search from the shell |
-| `python eval_recall.py` | retrieval gate: where each known answer comes back |
-| `python eval_recall.py --verify-markers` | is each eval marker actually present? |
-| `python export_store.py --corpus X --out f.jsonl` | corpus → text (portable, diffable) |
-| `python import_store.py f.jsonl --corpus peer` | text → corpus (re-embedded locally) |
-| `python doctor.py` | preflight every dependency, and warn about machine shape |
-| `./cron/refresh-with-ollama.sh` | pinned, low-priority refresh (the one to schedule) |
+| `python -m wetnoodle.ingest` | incremental ingest of every session corpus |
+| `python -m wetnoodle.ingest --status` | per-corpus counts and watermarks |
+| `python -m wetnoodle.ingest --full` | rebuild available corpora from scratch |
+| `python -m wetnoodle.ingest --purge-missing` | drop corpora whose source database is gone |
+| `python -m wetnoodle.ingest_skills` | index every `SKILL.md` |
+| `python -m wetnoodle.query "text" [-k N] [--corpus C]` | search from the shell |
+| `python -m wetnoodle.eval_recall` | retrieval gate: where each known answer comes back |
+| `python -m wetnoodle.eval_recall --verify-markers` | is each eval marker actually present? |
+| `python -m wetnoodle.export_store --corpus X --out f.jsonl` | corpus → text (portable, diffable) |
+| `python -m wetnoodle.import_store f.jsonl --corpus peer` | text → corpus (re-embedded locally) |
+| `python -m wetnoodle.doctor` | preflight every dependency, and warn about machine shape |
+| `./scripts/cron/refresh-with-ollama.sh` | pinned, low-priority refresh (the one to schedule) |
 | `python -E -m unittest discover -s tests -q` | smoke test, no Ollama needed (`-E` ignores a stray `PYTHONPATH`) |
 
 ## Settings
@@ -170,7 +188,7 @@ this store and independently measured.
 - **Hermes Agent with at least one profile, plus a local Ollama** running `nomic-embed-text` (768d). There is
   no cloud fallback and no second backend — Cloud Ollama cannot embed. Python 3.11+.
 - **Ingesting is CPU-heavy.** One embedding request can saturate every core it can see. `RAG_NUM_THREADS`
-  defaults to `min(4, nproc)`, and `cron/refresh-with-ollama.sh` pins the embedder to four cores at nice 19
+  defaults to `min(4, nproc)`, and `scripts/cron/refresh-with-ollama.sh` pins the embedder to four cores at nice 19
   and stops the daemon afterwards. Keep the first index supervised.
 - **A personal project, not a product.** No warranty, no support contract. It has broken a host once: a
   scheduled ingest pinned all 20 threads of a laptop, the WSL VM grew until Windows stopped responding, and

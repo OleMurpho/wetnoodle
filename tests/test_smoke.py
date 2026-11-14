@@ -22,8 +22,8 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
-import rag_core as core
-import render
+from wetnoodle import rag_core as core
+from wetnoodle import render
 
 DIM = 64
 
@@ -135,7 +135,7 @@ class SmokeTest(unittest.TestCase):
                     ("corpus", "session_id", "msg_start", "msg_end", "role", "ts", "source", "content"), r))) + "\n")
         self.assertGreater(len(rows), 0)
 
-        import import_store
+        from wetnoodle import import_store
         copy_db = os.path.join(self.tmp, "copy.db")
         old = core.RAG_DB
         core.RAG_DB = copy_db
@@ -156,7 +156,7 @@ class SmokeTest(unittest.TestCase):
 
     def test_6_corpus_filter_actually_scopes(self):
         """corpus= used to be accepted and ignored, so a scoped search returned the whole archive."""
-        import rag_core as core
+        from wetnoodle import rag_core as core
         hits = core.search("widget repair", k=5, corpus="probe")
         self.assertTrue(hits, "expected hits inside the corpus")
         self.assertTrue(all(h.get("corpus") == "probe" for h in hits),
@@ -165,8 +165,8 @@ class SmokeTest(unittest.TestCase):
 
     def test_7_judging_loop_snippet_and_open(self):
         """The window, the refs, and the failure path the agent depends on."""
-        import render
-        import rag_core as core
+        from wetnoodle import render
+        from wetnoodle import rag_core as core
         text = "boilerplate " * 40 + "the RANK GUARD rejects inverted relaxation " + "tail " * 40
         sn = render.snippet(text, "what guards against inverted relaxation", 200)
         self.assertIn("RANK GUARD", sn, "snippet must show the matching window, not the head")
@@ -185,7 +185,7 @@ class SmokeTest(unittest.TestCase):
         """A UTC label on a local epoch put every passage hours in the future."""
         import datetime
         import time
-        import rag_core as core
+        from wetnoodle import rag_core as core
         now = time.time()
         shown = datetime.datetime.strptime(core.fmt_date(now - 60), "%Y-%m-%d %H:%M")
         drift = abs((datetime.datetime.now().replace(second=0, microsecond=0) - shown).total_seconds())
@@ -194,7 +194,7 @@ class SmokeTest(unittest.TestCase):
 
     def test_9_snippet_finds_the_cluster_not_the_first_term(self):
         """Anchoring on first occurrences showed boilerplate and lost the cluster (agent review finding)."""
-        import render
+        from wetnoodle import render
         text = ("rank " + "xxxx " * 40 + "guard " + "xxxx " * 40 + "inverted " + "xxxx " * 40
                 + "relaxation " + "xxxx " * 40 + "THE CLUSTER rank guard inverted relaxation together")
         sn = render.snippet(text, "rank guard inverted relaxation", 200)
@@ -203,8 +203,8 @@ class SmokeTest(unittest.TestCase):
 
     def test_10_tool_errors_are_messages_not_tracebacks(self):
         """A first-time user with no index must get guidance, not an OperationalError through MCP."""
-        import mcp_server as m
-        import rag_core as core
+        from wetnoodle import mcp_server as m
+        from wetnoodle import rag_core as core
         saved = core.RAG_DB
         try:
             core.RAG_DB = "/nonexistent-dir-xyz/rag.db"
@@ -222,7 +222,7 @@ class SmokeTest(unittest.TestCase):
         """Importing an 8-dim export into a 64-dim store must refuse, not rewrite the store's meta."""
         import base64
         import struct
-        import import_store
+        from wetnoodle import import_store
         db = os.path.join(self.tmp, "dim_probe.db")
         old = core.RAG_DB
         core.RAG_DB = db
@@ -254,14 +254,14 @@ class SmokeTest(unittest.TestCase):
 
     def test_12_mcp_server_imports_on_the_installed_sdk(self):
         """The MCP SDK renamed FastMCP to MCPServer in 2.x; a fresh install must still import."""
-        import mcp_server as m
+        from wetnoodle import mcp_server as m
         self.assertTrue(hasattr(m, "rag_search"))
         self.assertTrue(hasattr(m, "rag_open"))
         self.assertTrue(hasattr(m, "rag_audit"))
 
     def test_13_embedding_requests_are_thread_limited(self):
         """A single /api/embed call pegged a 20-thread laptop. The request must carry a thread cap."""
-        import rag_core
+        from wetnoodle import rag_core
         seen = {}
 
         def fake_post(path, payload, *a, **k):
@@ -280,7 +280,7 @@ class SmokeTest(unittest.TestCase):
 
     def test_14_doctor_warns_about_wsl_and_unlimited_affinity(self):
         """The machine-shape warning is what would have prevented the outage report."""
-        import doctor
+        from wetnoodle import doctor
         warns = doctor.machine_warnings(nproc=20, ram_gb=7.6, is_wsl=True, affinity=20)
         names = [n for _, n, _ in warns]
         self.assertIn("machine shape", names)

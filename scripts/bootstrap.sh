@@ -40,16 +40,16 @@ if ! curl -fsS http://127.0.0.1:11434/api/tags | grep -q "\"$MODEL"; then
 fi
 
 say "doctor"
-./.venv/bin/python doctor.py || { echo "doctor found problems above; fix them and rerun"; exit 1; }
+./.venv/bin/python -m wetnoodle.doctor || { echo "doctor found problems above; fix them and rerun"; exit 1; }
 
 say "first ingest"
-./.venv/bin/python ingest.py --full
-./.venv/bin/python ingest_skills.py
+./.venv/bin/python -m wetnoodle.ingest --full
+./.venv/bin/python -m wetnoodle.ingest_skills
 
 say "done"
 cat <<'EOS'
 Try it:
-  ./.venv/bin/python query.py "a phrase you know is in your history"
+  ./.venv/bin/python -m wetnoodle.query "a phrase you know is in your history"
 
 Then, to let your agent use it, register the MCP server (see README "MCP registration") and add the
 refresh job (see README "Keeping it current"). Run the tests first if you like:
