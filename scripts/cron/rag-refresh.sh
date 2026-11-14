@@ -21,6 +21,8 @@ fi
 
 RAG_DIR="${RAG_DIR:-$HOME/.wetnoodle}"
 SRC="${WETNOODLE_SRC:-$(cd "$(dirname "$0")/../.." && pwd)}"
+mkdir -p "$RAG_DIR" 2>/dev/null || { echo "rag-refresh: cannot create store $RAG_DIR"; exit 1; }
+export RAG_DIR
 
 # Job runtime isolation. A cron job inherits the environment of whatever launched it, and a host process
 # may export PYTHONPATH for its own interpreter. Left alone, that makes this venv import a foreign numpy

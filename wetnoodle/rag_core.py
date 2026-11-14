@@ -756,10 +756,27 @@ def superseded_chunks():
 
 
 def fmt_date(ts):
+    """Render a timestamp for humans, and never raise.
+
+    Local session DBs store epoch reals; imported corpora (export_store/import_store)
+    keep ISO-8601 TEXT. This is called from audit(), so one odd value used to take the
+    whole refresh down before any corpus was ingested.
+    """
     import datetime
     if not ts:
         return "?"
-    return datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+    if isinstance(ts, str):
+        try:
+            return datetime.datetime.fromisoformat(ts).strftime("%Y-%m-%d %H:%M")
+        except ValueError:
+            try:
+                ts = float(ts)
+            except ValueError:
+                return ts
+    try:
+        return datetime.datetime.fromtimestamp(float(ts)).strftime("%Y-%m-%d %H:%M")
+    except (ValueError, OSError, OverflowError):
+        return str(ts)
 
 
 # --------------------------------------------------------------------------- #
@@ -797,8 +814,12 @@ def audit():
     """Index health report: per-corpus coverage + freshness, sizes, ollama."""
     con = sqlite3.connect(f"file:{RAG_DB}?mode=ro", uri=True)
     cur = con.cursor()
-    cur.execute("SELECT IFNULL(COUNT(*),0), IFNULL(MAX(ts),0) FROM chunks")
-    n_chunks, max_ts = cur.fetchone()
+    cur.execute("SELECT IFNULL(COUNT(*),0) FROM chunks")
+    n_chunks = cur.fetchone()[0]
+    # Numeric timestamps only: imported corpora carry ISO-8601 TEXT, and SQLite sorts text
+    # above reals, so a naive MAX(ts) reports an imported corpus' date as the newest chunk.
+    cur.execute("SELECT IFNULL(MAX(ts),0) FROM chunks WHERE typeof(ts) IN ('real','integer')")
+    max_ts = cur.fetchone()[0]
     cur.execute("SELECT COUNT(DISTINCT session_id) FROM chunks")
     n_sessions = cur.fetchone()[0]
     per = {
