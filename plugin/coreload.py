@@ -27,11 +27,41 @@ def core_path(repo: Path | str) -> Path:
     return packaged if packaged.exists() else repo / "rag_core.py"
 
 
+def ensure_numpy() -> None:
+    """Make numpy importable, or say exactly who cannot import it.
+
+    Hermes loads memory-provider plugins through a loader that hands the module a
+    sanitised sys.path: the plugin directory and the agent tree, but not the
+    interpreter's own site-packages. The interpreter has numpy; the module cannot
+    see it. sysconfig still knows the right path, so put it back.
+    """
+    try:
+        import numpy  # noqa: F401
+        return
+    except ModuleNotFoundError:
+        pass
+    import sysconfig
+
+    for key in ("purelib", "platlib"):
+        candidate = sysconfig.get_paths().get(key)
+        if candidate and candidate not in sys.path and Path(candidate).is_dir():
+            sys.path.append(candidate)
+    try:
+        import numpy  # noqa: F401
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            f"numpy is not importable by {sys.executable} — install it into that "
+            f"interpreter's site-packages (the MCP server uses its own venv, the "
+            f"memory provider does not)"
+        ) from exc
+
+
 def load_core(repo: Path | str):
     """Import and return the checkout's rag_core module (cached per process)."""
     cached = sys.modules.get(_MODULE_NAME)
     if cached is not None:
         return cached
+    ensure_numpy()
     path = core_path(repo)
     if not path.exists():
         raise ModuleNotFoundError(f"rag_core.py not found under {Path(repo)}")
