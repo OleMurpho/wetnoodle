@@ -33,9 +33,9 @@ def main():
         return
     if not hits:
         if args.corpus:
-            print(f"no hits in corpus {args.corpus!r} — check `python ingest.py --status` for corpus names")
+            print(f"no hits in corpus {args.corpus!r} — check `python -m wetnoodle.ingest --status` for names")
         else:
-            print("no hits — index empty? run ingest.py first")
+            print("no hits — index empty? run `python -m wetnoodle.ingest` first")
         return
 
     def header(i, h, body):

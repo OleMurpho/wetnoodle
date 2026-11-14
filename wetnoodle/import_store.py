@@ -69,6 +69,13 @@ def main():
               % (out_dim, dim))
         return 2
 
+    # Import writes into the same chunks table as ingest, so it takes the same lock: an import
+    # running during a cron ingest can interleave with a commit that is rewriting watermarks.
+    lock = core.exclusive_lock()
+    if lock is None:
+        print("another ingest is already running (see .ingest.lock); nothing imported.")
+        return 4
+
     inserted = 0
     for start in range(0, len(rows), BATCH):
         batch = rows[start:start + BATCH]

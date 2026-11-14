@@ -42,7 +42,7 @@ MAX_MSG_CHARS = int(os.environ.get("RAG_MAX_MSG_CHARS", "20000"))
 
 RAG_DB = os.path.join(RAG_DIR, "rag.db")
 OLLAMA = os.environ.get("RAG_OLLAMA", "http://127.0.0.1:11434")
-MODEL = os.environ.get("RAG_EMBED_MODEL", "nomic-embed-text")  # pins vector dim: changing it needs --full
+MODEL = os.environ.get("RAG_EMBED_MODEL", "nomic-embed-text")  # pins vector dim: changing it needs --reembed
 # --- politeness knobs ------------------------------------------------------ #
 # A default ingest saturated a 20-thread laptop and took its agent host down (see
 # docs/troubleshooting.md, "Running on a laptop or inside WSL"). Ollama spreads a single
@@ -475,6 +475,30 @@ def commit_ingest(rows, watermarks, dim, delete_corpora=()):
     cur.execute("PRAGMA busy_timeout=5000")
     try:
         with con:
+            # A full rebuild deletes and re-inserts chunks under new ids, so a retirement that
+            # points at an id is lost and the claim starts answering again. Snapshot retirements
+            # by content coordinates (corpus, session, msg_start, msg_end) and re-apply them to
+            # the new rows in the same transaction.
+            has_supersede = any(
+                r[1] == "superseded_by" for r in cur.execute("PRAGMA table_info(chunks)")
+            )
+            retired = {}
+            if delete_corpora and has_supersede:
+                # The reason lives in meta as supersede_reason:<chunk id>, not in a column, so
+                # a rebuild orphans it exactly the way it orphans the id-based pointer.
+                reasons = dict(cur.execute(
+                    "SELECT key, value FROM meta WHERE key LIKE 'supersede_reason:%'").fetchall())
+                for corpus in delete_corpora:
+                    old = cur.execute(
+                        "SELECT id, session_id, msg_start, msg_end, superseded_by, superseded_at "
+                        "FROM chunks WHERE corpus=?", (corpus,)).fetchall()
+                    id_key = {r[0]: (r[1], r[2], r[3]) for r in old}
+                    for r in old:
+                        if r[4] is not None:
+                            retired[(corpus, r[1], r[2], r[3])] = (
+                                r[0], id_key.get(r[4]), r[5],
+                                reasons.get(f"supersede_reason:{r[0]}"))
+
             for corpus in delete_corpora:
                 cur.execute("DELETE FROM chunks WHERE corpus=?", (corpus,))
                 cur.execute("DELETE FROM meta WHERE key=?", (watermark_key(corpus),))
@@ -496,6 +520,31 @@ def commit_ingest(rows, watermarks, dim, delete_corpora=()):
                         "VALUES(?,?,?,?,?,?,?,?,?,?)",
                         wide,
                     )
+            for key, (old_id, succ_key, when, reason) in retired.items():
+                corpus = key[0]
+                fresh = cur.execute(
+                    "SELECT id FROM chunks WHERE corpus=? AND session_id=? AND msg_start=? "
+                    "AND msg_end=? LIMIT 1", key).fetchone()
+                if reason is not None:
+                    cur.execute("DELETE FROM meta WHERE key=?", (f"supersede_reason:{old_id}",))
+                if not fresh:
+                    continue
+                succ_id = RETIRED_NO_SUCCESSOR
+                if succ_key:
+                    succ = cur.execute(
+                        "SELECT id FROM chunks WHERE corpus=? AND session_id=? AND msg_start=? "
+                        "AND msg_end=? LIMIT 1", (corpus,) + tuple(succ_key)).fetchone()
+                    if succ:
+                        succ_id = succ[0]
+                cur.execute(
+                    "UPDATE chunks SET superseded_by=?, superseded_at=? WHERE id=?",
+                    (succ_id, when, fresh[0]))
+                if reason is not None:
+                    cur.execute(
+                        "INSERT INTO meta(key, value) VALUES(?,?) "
+                        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                        (f"supersede_reason:{fresh[0]}", reason))
+
             for corpus, mark in (watermarks or {}).items():
                 cur.execute(
                     "INSERT INTO meta(key, value) VALUES(?,?) "
@@ -599,6 +648,31 @@ def reembed(batch=16):
     con.close()
     _CACHE.clear()
     return done
+
+
+def exclusive_lock():
+    """One writer at a time across every command that mutates chunks.
+
+    Watermarks are read before the work starts, so two overlapping runs read the same mark and
+    commit the same chunks twice. `ingest`, `--reembed`, `ingest_skills` and `import_store` all
+    take this lock; nothing else writes.
+
+    Returns an open handle (keep it alive for the duration) or None when another writer holds it.
+    fcntl is POSIX-only: on a platform without it the lock is a no-op rather than an import
+    crash, and the duplicate risk falls back to the caller's responsibility.
+    """
+    try:
+        import fcntl
+    except ImportError:
+        return open(os.devnull, "a+")
+    path = os.path.join(os.path.dirname(RAG_DB) or ".", ".ingest.lock")
+    handle = open(path, "a+")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        return None
+    return handle
 
 
 def get_dim():

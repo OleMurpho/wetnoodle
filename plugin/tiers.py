@@ -101,6 +101,10 @@ def __getattr__(name):
 
 BUDGET = {"long": 2500, "middle": 1000, "short": 1500}
 SEP = "\n§\n"
+
+# Everything below this line in MEMORY.long.md is kept verbatim on every refresh. Without it,
+# refresh() rewrote the file from the database and a hand-written line vanished with no warning.
+HAND_MARKER = "<!-- hand-edited below this line: kept verbatim on every refresh -->"
 MATURE_DAYS = 14
 MIDDLE_WINDOW_DAYS = 14
 SHORT_HOURS = 24
@@ -244,10 +248,24 @@ def render_short(current_session: str | None = None) -> tuple[str, int]:
     return "\n".join(kept), used
 
 
+def hand_tail() -> str:
+    """The hand-written part of MEMORY.long.md, if the marker is there."""
+    try:
+        text = _long_file().read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    if HAND_MARKER not in text:
+        return ""
+    return text.split(HAND_MARKER, 1)[1].strip("\n")
+
+
 def compose(current_session: str | None = None) -> tuple[str, dict]:
     """Full MEMORY.md text plus the per-section sizes actually used."""
     ensure_schema()
     long_txt, long_used = render_long()
+    tail = hand_tail()
+    if tail:
+        long_txt = (long_txt + "\n\n" + tail).strip()
     mid_txt, mid_used = render_middle(current_session)
     short_txt, short_used = render_short(current_session)
     used = {"long": long_used, "middle": mid_used, "short": short_used}
@@ -264,7 +282,11 @@ def refresh(current_session: str | None = None) -> dict:
     _mem_dir().mkdir(parents=True, exist_ok=True)
     facts = [r["text"].strip() for r in rows("long") if r["kind"] == "memory"]
     kept, _ = _fit(facts, BUDGET["long"])
-    _long_file().write_text(SEP.join(kept), encoding="utf-8")
+    tail = hand_tail()   # read before the write, or the write eats it
+    body = SEP.join(kept)
+    if tail:
+        body = body + "\n\n" + HAND_MARKER + "\n" + tail
+    _long_file().write_text(body, encoding="utf-8")
     text, used = compose(current_session)
     _composite().write_text(text, encoding="utf-8")
     _mirror().write_text(json.dumps({"at": time.time(), "used": used, "budget": BUDGET,

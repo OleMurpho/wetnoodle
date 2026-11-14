@@ -187,10 +187,15 @@ exactly one passage. Nineteen were locked away while the system was built and ne
 
 ![](docs/img/held-out.svg)
 
-**Six of nineteen** put the right passage first. The grey bar is the ceiling, not a result: in **seventeen of
-nineteen**, the answer was already among the twenty candidates. Search succeeds at *finding* and fails at
-*choosing* between near-misses, which is why `rag_search` hands a pool to the model instead of returning an
-answer of its own. Exact method and numbers: [`docs/models.md`](docs/models.md).
+On the fixed **2,000-passage comparison set** behind that chart — the set every setting in this project was
+measured against — **six of nineteen** put the right passage first, and in **seventeen of nineteen** the answer
+was already among the twenty candidates. On a full 7,674-passage archive the same shipped default does slightly
+better, because there is more context to match: **nine of nineteen** first, **sixteen of nineteen** available.
+
+Those are different corpora, and quoting one as if it were the other is how a benchmark stops meaning
+anything. Search succeeds at *finding* and fails at *choosing* between near-misses, which is why `rag_search`
+hands a pool to the model instead of returning an answer of its own. Exact method and both sets:
+[`docs/models.md`](docs/models.md).
 
 ## Commands
 
@@ -255,11 +260,14 @@ this store and independently measured.
 - **Paraphrase queries underperform identifier queries.** Embeddings drift from literal tokens; the keyword
   rerank only partly compensates.
 - **Chunks are raw conversation.** Half a chunk can be boilerplate. Quality is bounded by what was said.
-- **One embedding model per store.** A switch is refused before it can mix dimensions; `--reembed` rewrites
+- **When `serve_memory` is on, `MEMORY.md` is generated.** Hand-written lines go below the
+  `<!-- hand-edited below this line -->` marker in `MEMORY.long.md` and are kept verbatim on every refresh; text
+  above the marker is rewritten from the store. Without `serve_memory` the file is yours to edit freely. A switch is refused before it can mix dimensions; `--reembed` rewrites
   every chunk and memory item in place, including frozen and imported corpora that `--full` skips.
-- **Retirements do not survive `--full`.** Supersession is keyed on chunk ids, and a full rebuild reinserts
-  rows under new ids, so a retired claim comes back into circulation. Use `--reembed` when a corpus is still
-  available; reserve `--full` for a store you are willing to rebuild without its retirement history.
+- **Retirements survive a rebuild, by content coordinates.** Supersession is stored against chunk ids, which a
+  `--full` rebuild replaces, so the commit snapshots retirements by (corpus, session, msg_start, msg_end) and
+  re-applies them to the new rows in the same transaction. It follows the successor to its new id; a successor
+  that no longer exists yields the `-1` sentinel rather than a dead pointer.
 - **The ingest lock is POSIX-only** (`fcntl`). Linux, WSL and macOS are fine; native Windows would fail at
   import rather than silently run unlocked.
 - **Not multi-user.** It indexes the Hermes install it can see; there is no auth layer.

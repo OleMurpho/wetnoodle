@@ -54,6 +54,14 @@ echo "  checkout: $ROOT"
 echo "  profiles: ${PROFILES[*]}"
 echo "  scope   : ${SCOPE_ARGS[*]:-open (every corpus visible; use --scope-shared on a shared machine)}"
 
+# Several profiles on one store with no scope is the configuration that lets agents read each
+# other's transcripts, and it is the one an unattended install will silently produce.
+if [ "${#PROFILES[@]}" -gt 1 ] && [ "${#SCOPE_ARGS[@]}" -eq 0 ]; then
+    die "installing ${#PROFILES[@]} profiles with no scope shares every transcript between them.
+       Pass --scope-shared (hide the other profiles, keep skills and imports) or
+       --scope (each profile sees only its own corpus), or install one profile at a time."
+fi
+
 if [ "$SKIP_BOOTSTRAP" -eq 0 ]; then
     echo
     echo "== bootstrap =="
@@ -64,11 +72,13 @@ fi
 
 echo
 echo "== MCP server =="
-"$ROOT/scripts/register-mcp.sh" "${SCOPE_ARGS[@]}" "${PROFILES[@]}" || die "register-mcp failed"
+# ${arr[@]+...} is the portable idiom: bash 3.2 (macOS) errors on an empty array under set -u,
+# and the no-scope install is the common case.
+"$ROOT/scripts/register-mcp.sh" "${SCOPE_ARGS[@]+"${SCOPE_ARGS[@]}"}" "${PROFILES[@]}" || die "register-mcp failed"
 
 echo
 echo "== memory provider =="
-"$ROOT/scripts/install-memory-provider.sh" "${SCOPE_ARGS[@]}" "${PROFILES[@]}" || die "install-memory-provider failed"
+"$ROOT/scripts/install-memory-provider.sh" "${SCOPE_ARGS[@]+"${SCOPE_ARGS[@]}"}" "${PROFILES[@]}" || die "install-memory-provider failed"
 
 # One watchdog per store, not one per profile: every job ingests every corpus, so a second job
 # on the same archive is two processes contending for the same lock for no extra coverage.

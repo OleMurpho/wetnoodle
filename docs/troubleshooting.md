@@ -19,7 +19,8 @@ environment without breaking sibling imports. `cron/rag-refresh.sh` gets this ri
 ## `dim mismatch` after everything worked yesterday
 
 `RAG_EMBED_MODEL` changed. The model pins the vector dimension (768 for `nomic-embed-text`), so old and new
-vectors cannot be compared. Either set the old model back or rebuild: `python -m wetnoodle.ingest --full`.
+vectors cannot be compared. Either set the old model back, or rewrite the vectors in place:
+`python -m wetnoodle.ingest --reembed`. `--full` will not help: the model guard refuses to run it.
 
 ## `database is locked`
 
@@ -76,7 +77,10 @@ thread-rich and memory-poor, when it is WSL, and when nothing caps affinity:
 `taskset -c 0-3 nice -n 19 ./cron/rag-refresh.sh`. On Windows, capping `VmmemWSL` affinity in Task Manager
 buys you the seconds you need to get a terminal.
 
-**Cadence.** Two hours, not thirty minutes. Nothing in the design needs half-hourly freshness — the archive is
+**Cadence.** The shipped cron job runs every thirty minutes, which is affordable because the watchdog asks
+`ingest --status` first and exits immediately when nothing is behind: a tick that has nothing to do costs a
+status query, not an ingest. If you schedule `rag-refresh.sh` directly, two hours is the sane interval — the
+archive is
 read, not watched — and every extra run is another chance to catch the machine at load. A refresh is ~70 s per
 1,000 new chunks, so a two-hourly job that usually finds nothing is nearly free.
 

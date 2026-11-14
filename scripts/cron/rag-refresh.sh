@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# rag-refresh.sh — keep the index current. Run it every two hours, not every thirty minutes.
+# rag-refresh.sh — keep the index current. Schedule the watchdog (rag_auto_ingest.sh), not this file
+# directly: the watchdog checks freshness first, so a thirty-minute tick that has nothing to do costs a
+# status query. Calling this directly every two hours is the older, simpler arrangement.
 #
 # Silent on success, loud on failure: a cron job that prints on every run trains you to ignore it.
 # Override with RAG_DIR / RAG_PYTHON / RAG_OLLAMA.

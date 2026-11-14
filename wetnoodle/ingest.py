@@ -37,16 +37,7 @@ def _exclusive_lock():
     """One ingest at a time. Watermarks are read before work starts, so two overlapping
     runs read the same mark and commit the same chunks twice — the duplicates models.md
     reports are consistent with exactly that."""
-    import fcntl
-    import os
-    path = os.path.join(os.path.dirname(core.RAG_DB), ".ingest.lock")
-    handle = open(path, "a+")
-    try:
-        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        handle.close()
-        return None
-    return handle
+    return core.exclusive_lock()
 
 
 def run(full=False, only=None, purge_missing=False):

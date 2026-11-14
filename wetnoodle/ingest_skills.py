@@ -81,6 +81,21 @@ def _delete_skill(con, name):
 
 def run(force=False, prune=False):
     core.init_db()
+
+    # A skill ingest embeds with whatever model is configured. Without this guard it will happily
+    # write 96-dim vectors into a 768-dim store, after which every search raises: the same failure
+    # `ingest` refuses, reachable through the one command that skipped the check.
+    conflict = core.model_conflict()
+    if conflict:
+        print(conflict)
+        return 3
+
+    # Skills share the chunks table with sessions, so they share the writer lock too.
+    lock = core.exclusive_lock()
+    if lock is None:
+        print("another ingest is already running (see .ingest.lock); nothing done.")
+        return 4
+
     skills = discover()
     print(f"skills found: {len(skills)} across {len(skill_roots())} root(s)")
 
@@ -122,9 +137,10 @@ def run(force=False, prune=False):
         else:
             print(f"all {len(skills)} skill(s) already indexed and unchanged (use --all to force).")
         con.close()
-        return
+        return 0
 
     total_chunks = 0
+    failures = []
     for name, path, raw, digest in todo:
         chunks = _chunk_skill(name, raw, os.path.getmtime(path))
         if not chunks:
@@ -160,6 +176,7 @@ def run(force=False, prune=False):
                 )
         except sqlite3.Error as e:
             print(f"  ! {name}: commit failed ({e})")
+            failures.append(name)
             continue
         total_chunks += len(rows)
         print(f"  + {name}: {len(rows)} chunk(s) in {time.time() - t0:.1f}s")
@@ -167,6 +184,11 @@ def run(force=False, prune=False):
     con.close()
     core._CACHE.clear()  # never serve a stale matrix after new rows
     print(f"indexed {len(todo)} skill(s), {total_chunks} chunk(s).")
+    if failures:
+        # Exiting 0 here is how a corpus stops updating without anyone noticing.
+        print(f"failed: {len(failures)} skill(s): {', '.join(failures)}")
+        return 1
+    return 0
 
 
 def show():
@@ -185,4 +207,4 @@ if __name__ == "__main__":
     if "--list" in sys.argv:
         show()
     else:
-        run(force="--all" in sys.argv, prune="--prune" in sys.argv)
+        sys.exit(run(force="--all" in sys.argv, prune="--prune" in sys.argv))

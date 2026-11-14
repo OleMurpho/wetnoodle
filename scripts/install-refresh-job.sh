@@ -78,6 +78,10 @@ exec env RAG_DIR="$db_dir" RAG_PYTHON="$ROOT/.venv/bin/python" WETNOODLE_SRC="$R
 SHIM
     chmod +x "$shim"
 
+    # Seed the freshness marker so a dead embedder can be reported later instead of looking
+    # like a machine that simply has not run yet.
+    mkdir -p "$db_dir" 2>/dev/null && [ -f "$db_dir/.last_refresh_ok" ] || date +%s >"$db_dir/.last_refresh_ok" 2>/dev/null || true
+
     # Idempotent: update the existing job if this profile already has one.
     # Match the existing job by name or by the script it runs. Matching only on the name
     # would leave a second job doing the same ingest every cycle on a host that named it

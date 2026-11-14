@@ -427,6 +427,76 @@ class SmokeTest(unittest.TestCase):
         self.assertGreater(len(out), 1000, "rag_open must not fall back to the 800-char snippet cap")
         self.assertIn(body.strip()[-40:], out, "the end of the passage must survive")
 
+    def test_22_a_retired_claim_stays_retired_across_a_full_rebuild(self):
+        """A full rebuild deletes and reinserts rows under new ids.
+
+        Retirement used to be keyed on the old id, so the claim came back to life and its
+        successor pointer orphaned. The snapshot/re-apply is keyed on content coordinates.
+        """
+        old = core.RAG_DB
+        tmp = tempfile.mkdtemp()
+        core.RAG_DB = os.path.join(tmp, "rag.db")
+        try:
+            core.init_db()
+            rows = [(0, 1, "s", "user", 1.0, "src", "old claim", _vec("old").tobytes(), "t"),
+                    (2, 3, "s", "user", 3.0, "src", "new claim", _vec("new").tobytes(), "t")]
+            core.commit_ingest(rows, {"t": 3}, DIM)
+            con = sqlite3.connect(core.RAG_DB)
+            old_id, new_id = [r[0] for r in con.execute("SELECT id FROM chunks ORDER BY id")]
+            con.close()
+            core.supersede(old_id, new_id, "replaced")
+
+            # rebuild the corpus from the same text: new row ids, same coordinates
+            core.commit_ingest(rows, {"t": 3}, DIM, delete_corpora=("t",))
+            con = sqlite3.connect(core.RAG_DB)
+            got = con.execute(
+                "SELECT id, superseded_by FROM chunks WHERE content='old claim'").fetchone()
+            succ = con.execute("SELECT id FROM chunks WHERE content='new claim'").fetchone()[0]
+            reason = con.execute(
+                "SELECT value FROM meta WHERE key=?", (f"supersede_reason:{got[0]}",)).fetchone()
+            orphans = con.execute(
+                "SELECT COUNT(*) FROM meta WHERE key LIKE 'supersede_reason:%' "
+                "AND key NOT IN (SELECT 'supersede_reason:' || id FROM chunks WHERE superseded_by IS NOT NULL)"
+            ).fetchone()[0]
+            con.close()
+            self.assertIsNotNone(got[1], "the rebuilt row must still be retired")
+            self.assertEqual(got[1], succ, "the successor pointer must follow the new id")
+            self.assertEqual(reason[0] if reason else None, "replaced", "the reason must follow it too")
+            self.assertEqual(orphans, 0)
+        finally:
+            core.RAG_DB = old
+            core._CACHE.clear()
+
+    def test_23_audit_does_not_name_the_corpora_it_hides(self):
+        """Naming a corpus is the disclosure the scope filter exists to prevent."""
+        from wetnoodle import mcp_server
+        fake = {"chunks": 300, "corpora_count": 3, "session_chunks": 300, "skill_chunks": 0,
+                "latest_chunk_ts": "2026-01-01 00:00",
+                "corpora": {"mine": {"chunks": 100, "latest_chunk_ts": "2026-01-01 00:00"},
+                            "theirs": {"chunks": 200, "latest_chunk_ts": "2026-06-01 00:00"},
+                            "secret": {"chunks": 999, "latest_chunk_ts": "2026-09-01 00:00"}}}
+        old_env = {k: os.environ.get(k) for k in ("RAG_ALLOWED_CORPORA", "RAG_EXCLUDED_CORPORA")}
+        old_audit = core.audit
+        os.environ["RAG_EXCLUDED_CORPORA"] = "secret"
+        core.audit = lambda: json.loads(json.dumps(fake))
+        try:
+            fn = getattr(mcp_server.rag_audit, "fn", mcp_server.rag_audit)
+            out = str(fn())
+        finally:
+            core.audit = old_audit
+            for k, v in old_env.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        self.assertNotIn("secret", out, "the deny list must not be echoed")
+        report = json.loads(out)
+        self.assertEqual(report["scope"]["excluded_corpora"], 1)
+        # Only a deny list is set, so "theirs" is visible on purpose; "secret" is not.
+        self.assertEqual(report["chunks"], 300, "totals must cover only the visible corpora")
+        self.assertEqual(report["latest_chunk_ts"], "2026-06-01 00:00",
+                         "freshness must not leak the hidden corpus")
+
     def test_14_doctor_warns_about_wsl_and_unlimited_affinity(self):
         """The machine-shape warning is what would have prevented the outage report."""
         from wetnoodle import doctor

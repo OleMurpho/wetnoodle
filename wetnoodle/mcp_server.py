@@ -174,7 +174,16 @@ def rag_audit() -> str:
                     if isinstance(permitted.get("skill"), dict) else 0
             for hidden in ("sessions_covered", "rag_db_MB"):
                 report.pop(hidden, None)
-            report["scope"] = {"allowed": allow, "excluded": deny}
+            # Never echo the deny list: this code's own reason for filtering the corpus map is
+            # that naming a corpus discloses it. Report the shape of the scope, not its contents.
+            if isinstance(permitted, dict):
+                newest = max((v.get("latest_chunk_ts") or "" for v in permitted.values()
+                              if isinstance(v, dict)), default="")
+                if newest:
+                    report["latest_chunk_ts"] = newest
+            report["scope"] = {"scoped": True,
+                               "allowed_corpora": len(allow) if allow else None,
+                               "excluded_corpora": len(deny) if deny else 0}
         return json.dumps(report, indent=1)
     except sqlite3.Error as e:
         return (f'{{"error": "no index at {core.RAG_DB}: {e}", "hint": "run ingest.py, or point RAG_DIR '

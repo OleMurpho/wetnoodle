@@ -47,10 +47,11 @@ failure** — `doctor.py` names the fix, so do not improvise alternatives.
 
 ## What this system is actually good at, so you set expectations honestly
 
-Measured on a real 2,000-passage archive with 46 questions (19 of them never used while building): the
-search this kit ships puts the right passage first **6 of 19** times, and the right passage is somewhere in
-the pool **17 of 19** times. A cross-encoder second pass reaches 9 of 19, but it is not shipped — it needs an
-extra dependency and is kept only as a recorded result. The numbers live in `docs/results.json`; regenerate
+Measured with 46 questions, 19 of them never used while building. On the 2,000-passage comparison set the
+search this kit ships puts the right passage first **6 of 19** times and has it in the pool **17 of 19** times;
+on a full 7,674-passage archive the same configuration scores **9 of 19** and **16 of 19**. Quote whichever set
+you mean — they are not interchangeable. A cross-encoder second pass reaches 9 of 19 *on the comparison set*,
+but it is not shipped: it needs an extra dependency and is kept only as a recorded result. The numbers live in `docs/results.json`; regenerate
 `docs/img/held-out.svg` with `scripts/charts.py` rather than restating them from memory.
 
 So: it is good at *finding* material and mediocre at *ranking* it. Tell the user that, and use it accordingly
