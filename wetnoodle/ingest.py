@@ -11,6 +11,7 @@ far apart are all ingested incrementally and correctly. The old single
   python ingest.py --full              # rebuild every AVAILABLE corpus
   python ingest.py --full --corpus X   # rebuild just X
   python ingest.py --purge-missing     # drop chunks of corpora whose source is gone
+  python ingest.py --reembed           # re-embed every stored chunk (after a model switch)
 
 A corpus whose source database has been deleted (a removed profile) is FROZEN:
 its history stays searchable but it is never re-ingested. --full deliberately
@@ -32,8 +33,33 @@ def status():
     return a
 
 
+def _exclusive_lock():
+    """One ingest at a time. Watermarks are read before work starts, so two overlapping
+    runs read the same mark and commit the same chunks twice — the duplicates models.md
+    reports are consistent with exactly that."""
+    import fcntl
+    import os
+    path = os.path.join(os.path.dirname(core.RAG_DB), ".ingest.lock")
+    handle = open(path, "a+")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        return None
+    return handle
+
+
 def run(full=False, only=None, purge_missing=False):
     core.init_db()
+    lock = _exclusive_lock()
+    if lock is None:
+        print("another ingest is already running (see .ingest.lock); nothing done.")
+        return 4
+    if not purge_missing:
+        conflict = core.model_conflict()
+        if conflict:
+            print(conflict)
+            return 3
     sources = core.discover_sources()
     sessions = {k: v for k, v in sources.items() if v["kind"] == "sessions"}
     frozen = sorted(
@@ -69,6 +95,7 @@ def run(full=False, only=None, purge_missing=False):
 
     watermarks = {}
     grand_chunks = 0
+    failures = []
 
     for corpus, desc in sorted(sessions.items()):
         mark = 0 if full else core.get_watermark(corpus)
@@ -79,6 +106,7 @@ def run(full=False, only=None, purge_missing=False):
             print(f"  - {corpus}: source vanished mid-run, skipped")
             continue
         except Exception as e:
+            failures.append(corpus)
             print(f"  ! {corpus}: build failed ({type(e).__name__}: {e})")
             continue
 
@@ -114,12 +142,23 @@ def run(full=False, only=None, purge_missing=False):
         print(f"committed {grand_chunks} chunk(s) across {len(watermarks)} corpus/corpora.")
     else:
         print("already up to date.")
+    if failures:
+        # Exit nonzero: a scheduled refresh only speaks up when the job fails, so reporting
+        # success here means a broken corpus stays silently frozen.
+        print(f"incomplete: {len(failures)} corpus/corpora failed: {', '.join(sorted(failures))}")
+        return 1
     return 0
 
 
 if __name__ == "__main__":
     if "--status" in sys.argv:
         status()
+        sys.exit(0)
+
+    if "--reembed" in sys.argv:
+        core.init_db()
+        n = core.reembed()
+        print(f"re-embedded {n} chunk(s) with {core.MODEL} ({core.get_dim()}-dim)")
         sys.exit(0)
 
     only = None

@@ -278,6 +278,64 @@ class SmokeTest(unittest.TestCase):
         self.assertLessEqual(rag_core.NUM_THREADS, 16, "thread cap must actually be a cap")
         self.assertGreaterEqual(rag_core.NUM_THREADS, 1)
 
+    def test_15_rag_open_returns_a_whole_passage(self):
+        """rag_open exists to show the passage, so 800-char snippet caps must not apply.
+
+        Chunks in the real archive average ~1,050 characters. Rendering them with the
+        search cap cut the tail off most of them, which is the truncation models.md warns
+        about — reintroduced at the one place that promises "in full".
+        """
+        body = "x" * 1200
+        hit = {"id": 1, "content": body, "ts": 0, "corpus": "t", "session_id": "s",
+               "role": "user", "msg_start": 0, "msg_end": 0}
+        whole, _, _, truncated = render.bounded(
+            [hit], header=lambda i, h, b: b, hit_chars=render.OPEN_HIT_CHARS)
+        self.assertEqual(len(whole[0]), 1200, "rag_open must not truncate a 1,200-char chunk")
+        self.assertEqual(truncated, 0)
+        snippet, _, _, _ = render.bounded([hit], header=lambda i, h, b: b)
+        self.assertLess(len(snippet[0]), 1200, "the search cap should still bound snippets")
+
+    def test_16_a_model_switch_is_refused_before_it_corrupts_the_store(self):
+        """Mixed dimensions do not fail at insert; they fail at search, for every corpus."""
+        old = core.RAG_DB
+        tmp = tempfile.mkdtemp()
+        core.RAG_DB = os.path.join(tmp, "rag.db")
+        try:
+            core.init_db()
+            core.commit_ingest([(0, 1, "s", "user", 1.0, "t", "text", _vec("a").tobytes(), "c")],
+                               {}, DIM)
+            core._CACHE.clear()
+            self.assertEqual(core.stored_model(), core.MODEL)
+            self.assertEqual(core.model_conflict(), "", "the current model must not be a conflict")
+            with sqlite3.connect(core.RAG_DB) as con:
+                con.execute("UPDATE meta SET value='some-other-model' WHERE key='model'")
+            msg = core.model_conflict()
+            self.assertIn("some-other-model", msg)
+            self.assertIn("--reembed", msg, "the refusal must say what to do instead")
+        finally:
+            core.RAG_DB = old
+            core._CACHE.clear()
+
+    def test_17_supersede_without_a_successor_still_retires(self):
+        """superseded_by=NULL means 'live', so a bare retire must not write NULL."""
+        old = core.RAG_DB
+        tmp = tempfile.mkdtemp()
+        core.RAG_DB = os.path.join(tmp, "rag.db")
+        try:
+            core.init_db()
+            core.commit_ingest([(0, 1, "s", "user", 1.0, "t", "text", _vec("a").tobytes(), "c")],
+                               {}, DIM)
+            cid = sqlite3.connect(core.RAG_DB).execute("SELECT id FROM chunks").fetchone()[0]
+            self.assertTrue(core.supersede(cid))
+            row = sqlite3.connect(core.RAG_DB).execute(
+                "SELECT superseded_by, superseded_at FROM chunks WHERE id=?", (cid,)).fetchone()
+            self.assertIsNotNone(row[0], "a retired chunk must not look live")
+            self.assertEqual(int(row[0]), core.RETIRED_NO_SUCCESSOR)
+            self.assertIsNotNone(row[1])
+        finally:
+            core.RAG_DB = old
+            core._CACHE.clear()
+
     def test_14_doctor_warns_about_wsl_and_unlimited_affinity(self):
         """The machine-shape warning is what would have prevented the outage report."""
         from wetnoodle import doctor

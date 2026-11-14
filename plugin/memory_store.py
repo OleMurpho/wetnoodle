@@ -99,7 +99,9 @@ class MemoryStore:
             import sys
             import numpy as np  # noqa: F401  (import check only)
             os.environ.setdefault("RAG_DIR", str(self.db_path.parent))
-            self._core = load_core(Path.home() / "wetnoodle")
+            # self.repo, not ~/wetnoodle: this class is used outside the provider process too,
+            # where the first load_core() has not already put the right package in sys.modules.
+            self._core = load_core(self.repo)
         return self._core
 
     def embed(self, text: str) -> Optional[bytes]:
@@ -177,9 +179,13 @@ class MemoryStore:
     def remove(self, kind: str, old_text: str) -> int:
         con = self._con()
         try:
+            # Escape LIKE's own wildcards. Unescaped, a short old_text containing "_" or "%"
+            # matched many entries and hard-deleted all of them.
+            needle = old_text.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             rows = con.execute(
-                "SELECT id FROM memory_items WHERE kind=? AND superseded_by IS NULL AND text LIKE ?",
-                (kind, f"%{old_text.strip()}%"),
+                "SELECT id FROM memory_items WHERE kind=? AND superseded_by IS NULL "
+                "AND text LIKE ? ESCAPE '\\'",
+                (kind, f"%{needle}%"),
             ).fetchall()
             if not rows:
                 return 0
@@ -311,16 +317,9 @@ def record_entries(kind: str, entries: List[str], *, source: str = "builtin") ->
         return 0
     entries = [e.strip() for e in entries if e and e.strip()]
     store = _live_store()
-    con = store._con()
-    try:
-        with con:
-            # hide rather than delete: an entry that no longer fits the injected block stays
-            # recoverable in the archive instead of being silently destroyed
-            con.execute("UPDATE memory_items SET superseded_by=-1 WHERE kind=?", (kind,))
-    finally:
-        con.close()
-    if not entries:
-        return 0
+    # Embed BEFORE opening the write transaction: the old order hid every entry, then spent
+    # network time embedding, so a concurrent reader saw an empty memory and a crash left the
+    # whole target hidden. Hide-and-restore now happen in one transaction, after the work.
     try:
         blobs = store._embed_core().embed_documents(entries) if entries else []
     except Exception:
@@ -328,6 +327,9 @@ def record_entries(kind: str, entries: List[str], *, source: str = "builtin") ->
     con = store._con()
     try:
         with con:
+            # hide rather than delete: an entry that no longer fits the injected block stays
+            # recoverable in the archive instead of being silently destroyed
+            con.execute("UPDATE memory_items SET superseded_by=-1 WHERE kind=?", (kind,))
             for i, text in enumerate(entries):
                 blob = blobs[i].astype("float32").tobytes() if i < len(blobs) else None
                 row = con.execute(

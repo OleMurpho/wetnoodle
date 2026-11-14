@@ -155,7 +155,8 @@ answer of its own. Exact method and numbers: [`docs/models.md`](docs/models.md).
 |---|---|
 | `python -m wetnoodle.ingest` | incremental ingest of every session corpus |
 | `python -m wetnoodle.ingest --status` | per-corpus counts and watermarks |
-| `python -m wetnoodle.ingest --full` | rebuild available corpora from scratch |
+| `python ingest.py --full` | rebuild available corpora from scratch |
+| `python ingest.py --reembed` | re-embed every stored chunk after a model switch |
 | `python -m wetnoodle.ingest --purge-missing` | drop corpora whose source database is gone |
 | `python -m wetnoodle.ingest_skills` | index every `SKILL.md` |
 | `python -m wetnoodle.query "text" [-k N] [--corpus C]` | search from the shell |
@@ -176,7 +177,7 @@ invitation to experiment.
 |---|---|---|
 | `RAG_DIR` | `~/.wetnoodle` | where `rag.db` lives |
 | `RAG_HERMES_HOME` | `~/.hermes` | the Hermes install to index |
-| `RAG_EMBED_MODEL` | `nomic-embed-text` | **pins vector dim**; changing it needs `ingest.py --full` |
+| `RAG_EMBED_MODEL` | `nomic-embed-text` | **pins vector dim**; switching needs `--reembed`, not `--full` |
 | `RAG_OLLAMA` | `http://127.0.0.1:11434` | the local daemon |
 | `RAG_SKILLS_DIRS` | discovered | override skill roots (`:`-separated) |
 | `RAG_MAX_HIT_CHARS` | `800` | per-hit cap in tool output |

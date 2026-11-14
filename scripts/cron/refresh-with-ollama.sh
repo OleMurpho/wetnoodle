@@ -42,11 +42,11 @@ if ! curl -sf -m 3 "${RAG_OLLAMA:-http://127.0.0.1:11434}/" >/dev/null 2>&1; the
     # A bare `pkill -f "ollama serve"` would also kill a daemon the user is already relying on.
     if command -v setsid >/dev/null 2>&1; then
         OLLAMA_NUM_PARALLEL=1 OLLAMA_MAX_LOADED_MODELS=1 \
-            setsid nice -n "$NICE_N" "${LIMIT[@]}" "$OLLAMA_BIN" serve \
+            setsid nice -n "$NICE_N" "${LIMIT[@]+"${LIMIT[@]}"}" "$OLLAMA_BIN" serve \
             >"$HOME_DIR/.ollama-serve.log" 2>&1 &
     else
         OLLAMA_NUM_PARALLEL=1 OLLAMA_MAX_LOADED_MODELS=1 \
-            nohup nice -n "$NICE_N" "${LIMIT[@]}" "$OLLAMA_BIN" serve \
+            nohup nice -n "$NICE_N" "${LIMIT[@]+"${LIMIT[@]}"}" "$OLLAMA_BIN" serve \
             >"$HOME_DIR/.ollama-serve.log" 2>&1 &
     fi
     DAEMON_PID=$!
@@ -61,7 +61,7 @@ if ! curl -sf -m 3 "${RAG_OLLAMA:-http://127.0.0.1:11434}/" >/dev/null 2>&1; the
     fi
 fi
 
-nice -n "$NICE_N" "${LIMIT[@]}" bash "$HERE/rag-refresh.sh" "$@"
+nice -n "$NICE_N" "${LIMIT[@]+"${LIMIT[@]}"}" bash "$HERE/rag-refresh.sh" "$@"
 rc=$?
 
 if [ "$STARTED" = 1 ] && [ "${WETNOODLE_KEEP_DAEMON:-0}" != "1" ]; then

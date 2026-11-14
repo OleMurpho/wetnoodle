@@ -39,8 +39,8 @@ _DEFAULTS = {
     "corpora": "",              # comma separated allowlist; empty = all except skills
     "exclude_corpora": "skill",
     "score_floor": 0.62,        # absolute cosine floor for injection
-    "margin": 0.0,
-    "min_terms": 2,            # required lead over the next hit
+    "margin": 0.0,             # required lead over the runner-up (0 = disabled)
+    "min_terms": 2,            # query terms a hit must share to be injected
     "max_items": 3,
     "max_chars": 900,
     "item_chars": 240,
@@ -260,10 +260,14 @@ class WetnoodleMemoryProvider(MemoryProvider):
         margin = float(self._cfg["margin"])
         if not hits:
             return ""
-        top = float(hits[0]["score"])
+        # `score` is cosine, but hybrid search returns hits in blended order, so hits[0] is
+        # not necessarily the best cosine: gating on it dropped whole blocks where the top
+        # cosine sat second. Gate on the best, and measure the margin against the runner-up.
+        ranked = sorted((float(h["score"]) for h in hits), reverse=True)
+        top = ranked[0]
         if top < floor:
             return ""
-        if len(hits) > 1 and (top - float(hits[1]["score"])) < margin:
+        if len(ranked) > 1 and (top - ranked[1]) < margin:
             return ""
         terms = self._terms(self._last_query)
         need = int(self._cfg.get("min_terms", 2))
@@ -305,15 +309,10 @@ class WetnoodleMemoryProvider(MemoryProvider):
             pass
 
     def prefetch(self, query: str, *, session_id: str = "") -> str:
-        try:
-            import sys as _sys
-            here = str(Path(__file__).resolve().parent)
-            if here not in _sys.path:
-                _sys.path.insert(0, here)
-            import tiers as _t
-            _t.refresh(session_id or None)   # per-message: the document is rebuilt before recall
-        except Exception as e:
-            logger.debug("wetnoodle: tier refresh skipped: %s", e)
+        # No tier refresh here. rebuild-on-every-turn meant per-row UPDATEs, a write lock and
+        # three file rewrites per message -- and it contradicted this adapter's contract of
+        # never writing. `initialize()` still refreshes once per session, which is enough for
+        # a document whose inputs change at human speed.
         q = (query or "").strip()
         if len(q) < 12:
             return ""

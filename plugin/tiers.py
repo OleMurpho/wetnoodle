@@ -286,10 +286,15 @@ def promote(min_days: int = MATURE_DAYS) -> list[tuple[int, str]]:
             stable_days = (now - changed) / 86400
             if age_days < min_days or stable_days < min_days:
                 continue
-            terms = {w.lower().strip(".,:;()[]'\"") for w in r["text"].split() if len(w) > 5}
+            # sorted(), so the four terms are the same four in every process; and no terms
+            # means no evidence, not "AND ()", which is a syntax error.
+            terms = sorted({w.lower().strip(".,:;()[]'\"") for w in r["text"].split() if len(w) > 5})
+            if not terms:
+                continue
+            chosen = terms[:4]
             hit = con.execute("SELECT count(*) FROM messages WHERE timestamp > ? AND ("
-                              + " OR ".join(["lower(content) LIKE ?"] * min(len(terms), 4)) + ")",
-                              (changed, *[f"%{t}%" for t in list(terms)[:4]])).fetchone()[0]
+                              + " OR ".join(["lower(content) LIKE ?"] * len(chosen)) + ")",
+                              (changed, *[f"%{t}%" for t in chosen])).fetchone()[0]
             if not hit:
                 continue
             c2 = sqlite3.connect(_db())

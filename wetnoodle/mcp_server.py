@@ -57,7 +57,8 @@ def rag_search(query: str, pool: int = 12, corpus: str = "") -> str:
             query, k=max(1, min(size, 25)), corpus=(corpus or "").strip() or None
         )
     except (ValueError, TypeError) as e:
-        return f"rag_search error: pool must be a whole number; got {pool!r} ({e})"
+        # A bad query and a bad pool both raise ValueError; do not blame the pool for both.
+        return f"rag_search error: {e}"
     except sqlite3.Error as e:
         return (f"rag_search unavailable: no index at {core.RAG_DB} ({e}). "
                 f"Run ingest.py first, or point RAG_DIR at a store that exists.")
@@ -116,7 +117,7 @@ def rag_open(refs: list[str], max_chars: int = 0) -> str:
         )
 
     blocks, shown, available, _ = render.bounded(
-        hits, header=header, total_chars=budget
+        hits, header=header, hit_chars=render.OPEN_HIT_CHARS, total_chars=budget
     )
     out = "\n\n".join(blocks)
     if missing:

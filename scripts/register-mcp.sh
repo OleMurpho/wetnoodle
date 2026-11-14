@@ -60,7 +60,9 @@ say "targets"
 if [ "$#" -gt 0 ]; then
     TARGETS="$*"
 else
-    TARGETS=$(find "$PROFILES_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort)
+    # Portable: `find -printf` is GNU-only, so on macOS this listed nothing and the script
+    # reported that no profiles existed.
+    TARGETS=$(for d in "$PROFILES_DIR"/*/; do [ -d "$d" ] && basename "$d"; done | sort)
     [ -n "$TARGETS" ] || die "no profiles found under $PROFILES_DIR — pass profile names explicitly"
 fi
 echo "  $(echo "$TARGETS" | tr '\n' ' ')"

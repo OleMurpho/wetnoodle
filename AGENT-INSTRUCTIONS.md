@@ -22,7 +22,7 @@ failure** — `doctor.py` names the fix, so do not improvise alternatives.
    report the README's number as if it were theirs.
 9. **Register the MCP server** using the absolute path to `.venv/bin/python` (see README). Tell the user a
    gateway restart or a new session is needed before the tools appear; do not restart it yourself.
-10. **Schedule the refresh** (`cron/rag-refresh.sh`, every 30 min) and remind the user that the archive grows
+10. **Schedule the refresh** (`scripts/cron/rag-refresh.sh`, every two hours) and remind the user that the archive grows
     only as far as `ingest.py` has run — a stale archive answers with stale confidence.
 
 ## Rules

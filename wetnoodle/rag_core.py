@@ -153,8 +153,8 @@ def source_label(corpus, desc):
 # "what is the executable called"): the embedding of a paraphrase drifts away from
 # the literal token that answers it. A keyword component fixes exactly that case
 # without a second index — the chunks are already in `meta`, so term overlap is a
-# substring count. The two rankings are fused with reciprocal rank fusion, which
-# needs no score calibration between a cosine and a count.
+# substring count. Keywords only ever REORDER the vector candidates — they cannot add a
+# chunk the vectors missed — so the two signals never need calibrating against each other.
 HYBRID = os.environ.get("RAG_HYBRID", "1").strip() not in ("0", "false", "no", "")
 # Importance: a 0..1 signal an ingester may attach to a chunk (a decided constraint outranks an aside).
 # Applied centred on 0.5 so it can only reorder: score = cosine + W * (importance - 0.5).
@@ -504,6 +504,74 @@ def commit_ingest(rows, watermarks, dim, delete_corpora=()):
         con.close()
 
 
+def stored_model():
+    """The embedding model the store was built with, or "" for a fresh store."""
+    return str(get_meta("model", "") or "")
+
+
+def model_conflict():
+    """Explain why this run must not proceed, or return "".
+
+    Adding chunks from a second model to an existing store mixes vector sizes: the old rows
+    keep their dimension, `load_index` refuses the matrix, and search dies for every corpus
+    at once. Refusing up front is cheaper than explaining a corrupted index later.
+    """
+    stored = stored_model()
+    if not stored or stored == MODEL:
+        return ""
+    try:
+        con = sqlite3.connect(f"file:{RAG_DB}?mode=ro", uri=True)
+        n = con.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+        con.close()
+    except sqlite3.Error:
+        return ""
+    if not n:
+        return ""
+    return (
+        f"store was built with {stored!r} ({get_dim()}-dim), this run uses {MODEL!r}.\n"
+        f"Incremental ingest would mix vector sizes and break search for every corpus.\n"
+        f"Either keep the old model (RAG_EMBED_MODEL={stored}) or re-embed the archive:\n"
+        f"  python -m wetnoodle.ingest --reembed"
+    )
+
+
+def reembed(batch=16):
+    """Re-embed every stored chunk with the current model, in place.
+
+    The text lives in chunks.content, so switching models costs CPU, not data: no source
+    database has to still exist, which is what makes this work for frozen and imported
+    corpora that --full deliberately skips.
+    """
+    con = sqlite3.connect(RAG_DB)
+    cur = con.cursor()
+    cur.execute("PRAGMA busy_timeout=5000")
+    rows = cur.execute("SELECT id, content FROM chunks ORDER BY id").fetchall()
+    if not rows:
+        con.close()
+        return 0
+    done, dim = 0, get_dim()
+    for start in range(0, len(rows), batch):
+        part = rows[start:start + batch]
+        mats = embed_documents([r[1] or "" for r in part])
+        dim = int(np.asarray(mats).shape[1])
+        with con:
+            for (cid, _text), vec in zip(part, mats):
+                cur.execute("UPDATE chunks SET embedding=? WHERE id=?",
+                            (np.asarray(vec, dtype=np.float32).tobytes(), cid))
+        done += len(part)
+        print(f"  re-embedded {done}/{len(rows)}", flush=True)
+    with con:
+        for key, value in (("model", MODEL), ("dim", dim), ("last_ingest", time.time())):
+            cur.execute(
+                "INSERT INTO meta(key, value) VALUES(?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (key, str(value)),
+            )
+    con.close()
+    _CACHE.clear()
+    return done
+
+
 def get_dim():
     """Single source of truth for embedding dimension (set at ingest from the
     model's real output shape; 768 = nomic-embed-text)."""
@@ -607,7 +675,7 @@ def search(query, k=8, corpus=None, hybrid=None, include_superseded=False,
             # query actually matched the retired claim (pre-mask score), or every correction would sit
             # permanently at the top of every unrelated search.
             if SUCCESSOR_BOOST:
-                raw = scores
+                raw = list(scores)          # copy: the rerank below overwrites `scores` in place
                 ids = np.fromiter((m["id"] for m in meta), dtype=np.int64, count=len(meta))
                 pos = {int(v): i for i, v in enumerate(ids)}
                 for i, m in enumerate(meta):
@@ -693,6 +761,9 @@ def search(query, k=8, corpus=None, hybrid=None, include_superseded=False,
 # store beat the other on archive retrieval (ΔMRR +0.011, 95% CI −0.146…+0.170); this feature earns
 # its place on correctness, not on a score.
 # --------------------------------------------------------------------------- #
+RETIRED_NO_SUCCESSOR = -1  # superseded_by sentinel: retired, and nothing replaced it
+
+
 def supersede(old_id, new_id=None, reason=None):
     """Retire a chunk because a newer one replaces it (a corrected fact, a revised decision).
 
@@ -702,6 +773,9 @@ def supersede(old_id, new_id=None, reason=None):
 
     Returns True if a row changed. Callers must not assume the ids are adjacent in time.
     """
+    # NULL means "still live", so a retire-with-no-successor needs a marker that is not NULL.
+    # Writing NULL left the row live while reporting success.
+    successor = RETIRED_NO_SUCCESSOR if new_id is None else new_id
     con = sqlite3.connect(RAG_DB)
     cur = con.cursor()
     cur.execute("PRAGMA busy_timeout=5000")
@@ -710,7 +784,7 @@ def supersede(old_id, new_id=None, reason=None):
             n = cur.execute(
                 "UPDATE chunks SET superseded_by=?, superseded_at=? "
                 "WHERE id=? AND superseded_by IS NULL",
-                (new_id, time.time(), old_id),
+                (successor, time.time(), old_id),
             ).rowcount
             if n and reason:
                 cur.execute(

@@ -24,6 +24,11 @@ def _int(name: str, default: int) -> int:
 HIT_CHARS = _int("RAG_MAX_HIT_CHARS", 800)
 TOTAL_CHARS = _int("RAG_MAX_TOTAL_CHARS", 6000)
 
+# rag_open exists to return the passage the agent chose to trust, so it needs a cap that
+# fits a whole chunk rather than a snippet: chunks here average ~1,050 characters and run
+# past 1,200. Reusing the 800-char search cap silently cut the end off most of them.
+OPEN_HIT_CHARS = _int("RAG_MAX_OPEN_CHARS", 1500)
+
 
 def bounded(hits, *, header, hit_chars: int = 0, total_chars: int = 0):
     """Render hits under both caps.
