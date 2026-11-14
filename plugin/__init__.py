@@ -26,6 +26,11 @@ from typing import Any, Dict, List, Optional
 
 from agent.memory_provider import MemoryProvider
 
+try:
+    from coreload import core_path as _core_file, load_core
+except ImportError:  # package-style import
+    from .coreload import core_path as _core_file, load_core
+
 logger = logging.getLogger(__name__)
 
 _DEFAULTS = {
@@ -55,7 +60,7 @@ def _default_memories_dir() -> str:
         import memory_store as _ms
         return str(_ms._profile_home() / "memories")
     except Exception:
-        return str(Path.home() / ".hermes" / "profiles" / "mnemosyne" / "memories")
+        return str(Path.home() / ".hermes" / "memories")
 
 
 def _load_config() -> Dict[str, Any]:
@@ -70,16 +75,6 @@ def _load_config() -> Dict[str, Any]:
         pass
     cfg["memories_dir"] = cfg.get("memories_dir") or _default_memories_dir()
     return cfg
-
-
-def _core_file(repo: Path) -> Path:
-    """Where rag_core.py actually lives.
-
-    Modules moved into a `wetnoodle/` package; older checkouts kept them flat at the
-    root. Accept both rather than pinning the plugin to one repository layout.
-    """
-    packaged = repo / "wetnoodle" / "rag_core.py"
-    return packaged if packaged.exists() else repo / "rag_core.py"
 
 
 class WetnoodleMemoryProvider(MemoryProvider):
@@ -114,16 +109,9 @@ class WetnoodleMemoryProvider(MemoryProvider):
     def _import_core(self):
         if self._core is not None:
             return self._core
-        repo = str(self._cfg["repo"])
-        if repo not in sys.path:
-            sys.path.insert(0, repo)
         os.environ.setdefault("RAG_DIR", str(self._cfg["db_dir"]))
-        if (Path(repo) / "wetnoodle" / "rag_core.py").exists():
-            from wetnoodle import rag_core  # noqa: E402
-        else:
-            import rag_core  # noqa: E402
-        self._core = rag_core
-        return rag_core
+        self._core = load_core(self._cfg["repo"])
+        return self._core
 
     # ---------------------------------------------------------------- lifecycle
     def initialize(self, session_id: str, **kwargs) -> None:

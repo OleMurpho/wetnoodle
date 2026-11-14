@@ -214,6 +214,11 @@ this store and independently measured.
 
 - **Hermes Agent with at least one profile, plus a local Ollama** running `nomic-embed-text` (768d). There is
   no cloud fallback and no second backend — Cloud Ollama cannot embed. Python 3.11+.
+- **The interpreter that runs Hermes must be able to import `numpy`.** The MCP server uses wetnoodle's own
+  venv, but the memory provider runs inside Hermes' interpreter — and Hermes' bundled runtime is often a
+  minimal build without numpy. Without it the provider reports *not available* even though the archive and
+  the checkout are fine. With a bundled runtime, install it there:
+  `pip install --target <runtime>/lib/python3.X/site-packages numpy`.
 - **Ingesting is CPU-heavy.** One embedding request can saturate every core it can see. `RAG_NUM_THREADS`
   defaults to `min(4, nproc)`, and `scripts/cron/refresh-with-ollama.sh` pins the embedder to four cores at nice 19
   and stops the daemon afterwards. Keep the first index supervised.

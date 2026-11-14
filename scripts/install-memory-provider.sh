@@ -11,7 +11,7 @@
 # never becomes a second, drifting source of truth.
 #
 #   ./scripts/install-memory-provider.sh                 # every profile found
-#   ./scripts/install-memory-provider.sh mnemosyne       # only these
+#   ./scripts/install-memory-provider.sh work            # only these
 #   ./scripts/install-memory-provider.sh --remove        # unlink from every profile
 #
 # Idempotent. Existing real directories are moved aside, never deleted.

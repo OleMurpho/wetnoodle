@@ -17,6 +17,11 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+try:
+    from coreload import load_core
+except ImportError:  # package-style import
+    from .coreload import load_core
+
 def _profile_home() -> Path:
     """Profile directory this process acts for; memory_tool is authoritative, env is fallback."""
     try:
@@ -29,7 +34,7 @@ def _profile_home() -> Path:
     env = os.environ.get("HERMES_HOME")
     if env and Path(env).is_dir():
         return Path(env)
-    return Path.home() / ".hermes" / "profiles" / "mnemosyne"
+    return Path.home() / ".hermes"
 
 
 def _db_path() -> Path:
@@ -93,18 +98,8 @@ class MemoryStore:
         if self._core is None:
             import sys
             import numpy as np  # noqa: F401  (import check only)
-            if str(self.repo) not in sys.path:
-                sys.path.insert(0, str(self.repo))
             os.environ.setdefault("RAG_DIR", str(self.db_path.parent))
-            # modules live in a `wetnoodle/` package; older checkouts kept them flat
-            repo = Path.home() / "wetnoodle"
-            if (repo / "wetnoodle" / "rag_core.py").exists():
-                if str(repo) not in sys.path:
-                    sys.path.insert(0, str(repo))
-                from wetnoodle import rag_core
-            else:
-                import rag_core
-            self._core = rag_core
+            self._core = load_core(Path.home() / "wetnoodle")
         return self._core
 
     def embed(self, text: str) -> Optional[bytes]:

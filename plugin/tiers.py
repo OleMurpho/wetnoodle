@@ -46,7 +46,7 @@ def _profile_home() -> Path:
     env = os.environ.get("HERMES_HOME")
     if env and Path(env).is_dir():
         return Path(env)
-    return HOME / ".hermes" / "profiles" / "mnemosyne"
+    return HOME / ".hermes"
 
 
 def _paths() -> dict:
