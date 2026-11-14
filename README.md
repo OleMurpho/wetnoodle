@@ -34,6 +34,17 @@ curl -fsSL https://ollama.com/install.sh | sh          # macOS/Windows: https://
 ollama pull nomic-embed-text
 ```
 
+On any machine that already runs Hermes and a local Ollama, one command does the whole install —
+bootstrap, MCP server, memory provider and the refresh watchdog:
+
+```bash
+git clone https://github.com/OleMurpho/wetnoodle.git && cd wetnoodle
+./scripts/install.sh -p <profile> --scope-shared
+```
+
+It is idempotent, so it is also the repair command. The steps below are what it runs, in that order, if
+you would rather do them one at a time or see what each one changed.
+
 ```bash
 # 2. Clone, bootstrap, first index
 git clone https://github.com/OleMurpho/wetnoodle.git && cd wetnoodle

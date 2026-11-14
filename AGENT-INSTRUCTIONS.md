@@ -20,14 +20,17 @@ failure** — `doctor.py` names the fix, so do not improvise alternatives.
    `eval/questions.local.json` and replace it with 8–10 questions about *this* archive, each with a marker you
    verified with `--verify-markers`. Then run `python -m wetnoodle.eval_recall`. Report the MRR you measured — do not
    report the README's number as if it were theirs.
-9. **Register the MCP server** with `scripts/register-mcp.sh`, and **ask the user which scope they want** before
+9. **Prefer `scripts/install.sh`** — it runs steps 2 through 10 in order and is safe to re-run. Do the steps
+   by hand only when you need to see what one of them changed.
+
+10. **Register the MCP server** with `scripts/register-mcp.sh`, and **ask the user which scope they want** before
    running it. With one profile it does not matter. With several, an unscoped install lets every agent read
    every other agent's transcripts through the tools and through pre-turn recall, and nothing about the
    install looks wrong afterwards. `--scope-shared` hides the other profiles and keeps skills and imports;
    `--scope` restricts each profile to its own corpus, skills and notes. Register the same choice for the
    provider with `scripts/install-memory-provider.sh`, or the two will disagree. Tell the user a gateway
    restart or a new session is needed before the tools appear; do not restart it yourself.
-10. **Schedule the refresh** with `scripts/install-refresh-job.sh -p <profile>`, which creates or updates the
+11. **Schedule the refresh** with `scripts/install-refresh-job.sh -p <profile>`, which creates or updates the
    Hermes cron job for `scripts/cron/rag_auto_ingest.sh` every thirty minutes and stays silent unless it fails.
    Do not write a crontab entry as well; two schedules ingesting the same archive will contend for the same
    lock and teach the user to ignore the alerts. Remind them that the archive grows
