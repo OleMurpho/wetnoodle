@@ -8,10 +8,10 @@ far apart are all ingested incrementally and correctly. The old single
   python ingest.py                     # incremental across all corpora
   python ingest.py --status            # per-corpus state, no work
   python ingest.py --corpus <profile> # one corpus only
-  python ingest.py --full              # rebuild every AVAILABLE corpus
-  python ingest.py --full --corpus X   # rebuild just X
-  python ingest.py --purge-missing     # drop chunks of corpora whose source is gone
-  python ingest.py --reembed           # re-embed every stored chunk (after a model switch)
+  python -m wetnoodle.ingest --full    # rebuild every AVAILABLE corpus
+  python -m wetnoodle.ingest --full --corpus X   # rebuild just X
+  python -m wetnoodle.ingest --purge-missing     # drop chunks of corpora whose source is gone
+  python -m wetnoodle.ingest --reembed # re-embed every stored chunk and memory item
 
 A corpus whose source database has been deleted (a removed profile) is FROZEN:
 its history stays searchable but it is never re-ingested. --full deliberately
@@ -157,6 +157,17 @@ if __name__ == "__main__":
 
     if "--reembed" in sys.argv:
         core.init_db()
+        # Same lock as ingest: a cron run on the old model must not add old-width chunks
+        # half way through the rewrite.
+        lock = _exclusive_lock()
+        if lock is None:
+            print("another ingest or re-embed is running (see .ingest.lock); nothing done.")
+            sys.exit(4)
+        stored = core.stored_model()
+        if stored and stored == core.MODEL and "--force" not in sys.argv:
+            print(f"store is already on {stored} ({core.get_dim()}-dim); nothing to re-embed. "
+                  f"Pass --force to rewrite the vectors anyway.")
+            sys.exit(0)
         n = core.reembed()
         print(f"re-embedded {n} chunk(s) with {core.MODEL} ({core.get_dim()}-dim)")
         sys.exit(0)

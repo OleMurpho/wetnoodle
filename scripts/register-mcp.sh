@@ -54,15 +54,24 @@ echo "  hermes    : $HERMES_BIN"
 SCOPE=""
 SHARED=""
 ALLOW="${RAG_ALLOWED_CORPORA:-}"
+POSITIONAL=()
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --scope) SCOPE=1; shift ;;
         --scope-shared) SHARED=1; shift ;;
-        --allow) ALLOW="${2:-}"; shift 2 ;;
+        --allow)
+            # shift 2 with one argument left fails without advancing, which looped forever
+            [ "$#" -ge 2 ] || die "--allow needs a value, e.g. --allow default,skill"
+            ALLOW="$2"; shift 2 ;;
         --allow=*) ALLOW="${1#*=}"; shift ;;
-        *) break ;;
+        *) POSITIONAL+=("$1"); shift ;;     # profiles may follow the flags
     esac
 done
+if [ "${#POSITIONAL[@]}" -gt 0 ]; then
+    set -- "${POSITIONAL[@]}"
+else
+    set --
+fi
 
 say "wrapper"
 mkdir -p "$(dirname "$WRAPPER")"
@@ -85,6 +94,15 @@ else
     [ -n "$TARGETS" ] || die "no profiles found under $PROFILES_DIR — pass profile names explicitly"
 fi
 echo "  $(echo "$TARGETS" | tr '\n' ' ')"
+# Loud, not silent: with several profiles on one store and no scope, every agent can read
+# every other agent's transcripts, and the install looks perfectly healthy.
+if [ -z "$SCOPE" ] && [ -z "$SHARED" ] && [ -z "$ALLOW" ] && [ "$(echo "$TARGETS" | wc -w)" -gt 1 ]; then
+    echo
+    echo "  WARNING: $# profile(s) share one store and no scope was given."
+    echo "           Each one can read the others' transcripts. Add --scope-shared,"
+    echo "           or --allow <corpora> for an explicit list."
+    echo
+fi
 
 say "registering"
 for p in $TARGETS; do

@@ -360,6 +360,73 @@ class SmokeTest(unittest.TestCase):
             core.RAG_DB = old
             core._CACHE.clear()
 
+    def test_19_a_corpus_argument_cannot_widen_the_scope(self):
+        """search(corpus=...) used to union with the allowlist, so naming a forbidden corpus
+        returned its 320-character snippets even though rag_open refused the full text."""
+        old = core.RAG_DB
+        tmp = tempfile.mkdtemp()
+        core.RAG_DB = os.path.join(tmp, "rag.db")
+        try:
+            core.init_db()
+            # 9-tuple: msg_start, msg_end, session_id, role, ts, SOURCE, content, embedding, CORPUS
+            rows = [(0, 1, "s1", "user", 1.0, "src", "gateway restart decided", _vec("gateway restart").tobytes(), "mine"),
+                    (0, 1, "s2", "user", 2.0, "src", "gateway restart secret", _vec("gateway restart").tobytes(), "other")]
+            core.commit_ingest(rows, {}, DIM)
+            core._CACHE.clear()
+
+            allowed = core.search("gateway restart", k=5, corpora=["mine"])
+            self.assertTrue(allowed)
+            self.assertEqual({h["corpus"] for h in allowed}, {"mine"})
+
+            widened = core.search("gateway restart", k=5, corpora=["mine"], corpus="other")
+            self.assertEqual(widened, [], "naming a forbidden corpus must not widen the scope")
+
+            narrowed = core.search("gateway restart", k=5, corpora=["mine"], corpus="mine")
+            self.assertTrue(narrowed)
+            self.assertEqual({h["corpus"] for h in narrowed}, {"mine"})
+
+            # no allowlist: the corpus argument still selects, which is the documented behaviour
+            anywhere = core.search("gateway restart", k=5, corpus="other")
+            self.assertEqual({h["corpus"] for h in anywhere}, {"other"})
+        finally:
+            core.RAG_DB = old
+            core._CACHE.clear()
+
+    def test_20_an_all_retired_scope_returns_empty_rather_than_raising(self):
+        old = core.RAG_DB
+        tmp = tempfile.mkdtemp()
+        core.RAG_DB = os.path.join(tmp, "rag.db")
+        try:
+            core.init_db()
+            core.commit_ingest([(0, 1, "s", "user", 1.0, "src", "gateway restart", _vec("gateway restart").tobytes(), "t")], {}, DIM)
+            cid = sqlite3.connect(core.RAG_DB).execute("SELECT id FROM chunks").fetchone()[0]
+            core.supersede(cid)
+            core._CACHE.clear()
+            self.assertEqual(core.search("gateway restart", k=5, corpora=["t"]), [])
+        finally:
+            core.RAG_DB = old
+            core._CACHE.clear()
+
+    def test_21_rag_open_itself_passes_the_whole_passage_cap(self):
+        """test_15 exercises render.bounded; this one exercises the tool.
+
+        A regression where rag_open stops passing OPEN_HIT_CHARS would leave a 1,200-character
+        chunk cut at 800 and test_15 would still pass.
+        """
+        from wetnoodle import mcp_server
+        body = "passage " * 200          # ~1,600 characters
+        hit = {"id": 1, "content": body, "ts": 0, "corpus": "t", "session_id": "s",
+               "role": "user", "msg_start": 0, "msg_end": 0}
+        old = core.get_chunks
+        core.get_chunks = lambda ids, **kw: ([hit], [])
+        try:
+            fn = getattr(mcp_server.rag_open, "fn", mcp_server.rag_open)
+            out = str(fn(["c1"]))
+        finally:
+            core.get_chunks = old
+        self.assertGreater(len(out), 1000, "rag_open must not fall back to the 800-char snippet cap")
+        self.assertIn(body.strip()[-40:], out, "the end of the passage must survive")
+
     def test_14_doctor_warns_about_wsl_and_unlimited_affinity(self):
         """The machine-shape warning is what would have prevented the outage report."""
         from wetnoodle import doctor

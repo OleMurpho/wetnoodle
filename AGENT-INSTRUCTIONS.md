@@ -20,8 +20,13 @@ failure** — `doctor.py` names the fix, so do not improvise alternatives.
    `eval/questions.local.json` and replace it with 8–10 questions about *this* archive, each with a marker you
    verified with `--verify-markers`. Then run `python -m wetnoodle.eval_recall`. Report the MRR you measured — do not
    report the README's number as if it were theirs.
-9. **Register the MCP server** using the absolute path to `.venv/bin/python` (see README). Tell the user a
-   gateway restart or a new session is needed before the tools appear; do not restart it yourself.
+9. **Register the MCP server** with `scripts/register-mcp.sh`, and **ask the user which scope they want** before
+   running it. With one profile it does not matter. With several, an unscoped install lets every agent read
+   every other agent's transcripts through the tools and through pre-turn recall, and nothing about the
+   install looks wrong afterwards. `--scope-shared` hides the other profiles and keeps skills and imports;
+   `--scope` restricts each profile to its own corpus, skills and notes. Register the same choice for the
+   provider with `scripts/install-memory-provider.sh`, or the two will disagree. Tell the user a gateway
+   restart or a new session is needed before the tools appear; do not restart it yourself.
 10. **Schedule the refresh** (`scripts/cron/rag-refresh.sh`, every two hours) and remind the user that the archive grows
     only as far as `ingest.py` has run — a stale archive answers with stale confidence.
 
@@ -29,16 +34,18 @@ failure** — `doctor.py` names the fix, so do not improvise alternatives.
 
 - Never commit `rag.db`, `*.jsonl`, `imports/`, or `eval/questions.local.json`. `scripts/hygiene.sh` is the
   gate; run it before any push.
-- Never change `RAG_EMBED_MODEL` on a populated store without `ingest.py --full`: the dimension mismatch reads
-  like corruption.
+- Never change `RAG_EMBED_MODEL` on a populated store without `python -m wetnoodle.ingest --reembed`: a
+  dimension mismatch reads like corruption, and `--full` cannot fix it because the guard refuses the run.
 - Never paste the user's transcripts into a report. Quote a short span, or describe it.
 - Do not add an LLM to the ingestion path. Determinism and zero token cost are the point.
 
 ## What this system is actually good at, so you set expectations honestly
 
-Measured on a real 7,674-passage archive with 46 questions (19 of them never used while building): plain
-search puts the right passage first **47%** of the time, and the right passage is somewhere in the top twenty
-**84%** of the time. A cross-encoder second pass takes it to 53%.
+Measured on a real 2,000-passage archive with 46 questions (19 of them never used while building): the
+search this kit ships puts the right passage first **6 of 19** times, and the right passage is somewhere in
+the pool **17 of 19** times. A cross-encoder second pass reaches 9 of 19, but it is not shipped — it needs an
+extra dependency and is kept only as a recorded result. The numbers live in `docs/results.json`; regenerate
+`docs/img/held-out.svg` with `scripts/charts.py` rather than restating them from memory.
 
 So: it is good at *finding* material and mediocre at *ranking* it. Tell the user that, and use it accordingly
 — ask for 5–8 hits and read them, rather than trusting the first one. If someone demands 90% first-hit

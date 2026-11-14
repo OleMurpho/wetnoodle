@@ -1,7 +1,7 @@
 # Choosing an embedding model
 
 The store is model-agnostic, but the **dimension** and the **query format** are not. Changing model means
-re-embedding everything (`ingest.py --full`), and using the wrong query prefix costs real accuracy.
+re-embedding everything (`--reembed`), and using the wrong query prefix costs real accuracy.
 
 ## Measured on a real archive
 

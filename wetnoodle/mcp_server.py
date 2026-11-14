@@ -152,10 +152,28 @@ def rag_audit() -> str:
             keep = lambda name: (not allow or name in allow) and name not in deny
             counts = report.get("corpora")
             if isinstance(counts, dict):
-                report["corpora"] = {k: v for k, v in counts.items() if keep(k)}
+                permitted = {k: v for k, v in counts.items() if keep(k)}
+                report["corpora"] = permitted
             elif isinstance(counts, list):
-                report["corpora"] = [c for c in counts
-                                     if keep(c.get("corpus") if isinstance(c, dict) else c)]
+                permitted = [c for c in counts
+                             if keep(c.get("corpus") if isinstance(c, dict) else c)]
+                report["corpora"] = permitted
+            else:
+                permitted = {}
+            # The aggregates leak what the per-corpus filter just hid: a chunk total larger
+            # than the visible corpora is itself a disclosure. Recompute them from what the
+            # caller may see, or drop the ones that cannot be recomputed.
+            if isinstance(permitted, dict):
+                total = sum(int(v.get("chunks", 0)) for v in permitted.values()
+                            if isinstance(v, dict))
+                report["chunks"] = total
+                report["corpora_count"] = len(permitted)
+                report["session_chunks"] = sum(int(v.get("chunks", 0)) for k, v in permitted.items()
+                                               if k != "skill" and isinstance(v, dict))
+                report["skill_chunks"] = int((permitted.get("skill") or {}).get("chunks", 0)) \
+                    if isinstance(permitted.get("skill"), dict) else 0
+            for hidden in ("sessions_covered", "rag_db_MB"):
+                report.pop(hidden, None)
             report["scope"] = {"allowed": allow, "excluded": deny}
         return json.dumps(report, indent=1)
     except sqlite3.Error as e:

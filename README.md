@@ -126,7 +126,7 @@ happily surface another's private conversation. Both halves of the integration t
 
 ```bash
 ./scripts/register-mcp.sh --scope-shared             # read everything except other profiles
-RAG_EXCLUDE_SHARED=1 ./scripts/install-memory-provider.sh --scope-shared
+./scripts/install-memory-provider.sh --scope-shared
 ./scripts/register-mcp.sh --scope                    # strict: own corpus, skill, notes only
 ```
 
@@ -176,8 +176,8 @@ answer of its own. Exact method and numbers: [`docs/models.md`](docs/models.md).
 |---|---|
 | `python -m wetnoodle.ingest` | incremental ingest of every session corpus |
 | `python -m wetnoodle.ingest --status` | per-corpus counts and watermarks |
-| `python ingest.py --full` | rebuild available corpora from scratch |
-| `python ingest.py --reembed` | re-embed every stored chunk after a model switch |
+| `python -m wetnoodle.ingest --full` | rebuild available corpora from scratch |
+| `python -m wetnoodle.ingest --reembed` | re-embed every chunk and memory item after a model switch |
 | `python -m wetnoodle.ingest --purge-missing` | drop corpora whose source database is gone |
 | `python -m wetnoodle.retire c1234 --by c1250` | retire a chunk, naming the one that replaces it |
 | `python -m wetnoodle.ingest_skills` | index every `SKILL.md` |
@@ -203,6 +203,9 @@ invitation to experiment.
 | `RAG_OLLAMA` | `http://127.0.0.1:11434` | the local daemon |
 | `RAG_SKILLS_DIRS` | discovered | override skill roots (`:`-separated) |
 | `RAG_MAX_HIT_CHARS` | `800` | per-hit cap in tool output |
+| `RAG_MAX_OPEN_CHARS` | `1500` | per-passage cap for `rag_open`, large enough for a whole chunk |
+| `RAG_ALLOWED_CORPORA` | unset | allowlist; unset means every corpus is visible |
+| `RAG_EXCLUDED_CORPORA` | unset | denylist; wins over the allowlist, and is how `--scope-shared` works |
 | `RAG_MAX_TOTAL_CHARS` | `6000` | cap across the whole result set |
 | `RAG_NUM_THREADS` | `min(4, nproc)` | threads Ollama may use **per embedding request** |
 | `RAG_BATCH` | `16` | passages per request; smaller means shorter load spikes |
@@ -229,8 +232,13 @@ this store and independently measured.
 - **Paraphrase queries underperform identifier queries.** Embeddings drift from literal tokens; the keyword
   rerank only partly compensates.
 - **Chunks are raw conversation.** Half a chunk can be boilerplate. Quality is bounded by what was said.
-- **One embedding model per store.** Switching models without `--full` is a dimension mismatch, which reads
-  like corruption — `import_store.py` refuses rather than write it.
+- **One embedding model per store.** A switch is refused before it can mix dimensions; `--reembed` rewrites
+  every chunk and memory item in place, including frozen and imported corpora that `--full` skips.
+- **Retirements do not survive `--full`.** Supersession is keyed on chunk ids, and a full rebuild reinserts
+  rows under new ids, so a retired claim comes back into circulation. Use `--reembed` when a corpus is still
+  available; reserve `--full` for a store you are willing to rebuild without its retirement history.
+- **The ingest lock is POSIX-only** (`fcntl`). Linux, WSL and macOS are fine; native Windows would fail at
+  import rather than silently run unlocked.
 - **Not multi-user.** It indexes the Hermes install it can see; there is no auth layer.
 
 ## Requirements and status

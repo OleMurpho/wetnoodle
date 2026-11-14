@@ -159,6 +159,26 @@ class MemoryStoreTests(unittest.TestCase):
         live = [r["text"] for r in self.store.entries("memory")]
         self.assertEqual(live, ["third fact"])
 
+    def test_patch_is_case_insensitive_like_its_match(self):
+        """The lookup used LIKE (case-insensitive) and the edit used str.replace (not).
+
+        A patch whose old_text differed only in case therefore changed nothing and still
+        reported that the entry had been updated.
+        """
+        self.store.add("memory", "Gateway restarts on boot")
+        changed = self.store.patch("memory", "gateway restarts", "gateway never restarts")
+        self.assertEqual(changed, 1)
+        text = self.store.entries("memory")[0]["text"]
+        self.assertIn("never restarts", text)
+        self.assertNotIn("Gateway restarts", text)
+
+    def test_remove_refuses_an_ambiguous_match(self):
+        self.store.add("memory", "gateway restarts on boot")
+        self.store.add("memory", "the gateway holds a lock")
+        with self.assertRaises(ValueError):
+            self.store.remove("memory", "gateway")
+        self.assertEqual(len(self.store.entries("memory")), 2, "nothing may be deleted on a refusal")
+
     def test_embedding_uses_the_configured_repo(self):
         """A hard-coded ~/wetnoodle made embedding fail silently anywhere else."""
         self.assertEqual(Path(self.store.repo), PLUGIN_DIR.parent)

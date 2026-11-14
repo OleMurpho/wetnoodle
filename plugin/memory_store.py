@@ -11,6 +11,7 @@ rendered from this table and written back as plain exports.
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -37,9 +38,35 @@ def _profile_home() -> Path:
     return Path.home() / ".hermes"
 
 
+def _like(needle: str) -> str:
+    """A LIKE pattern that treats the needle literally.
+
+    Unescaped, `_` matches any character and `%` matches everything, so a short old_text
+    could match entries the user never named.
+    """
+    escaped = needle.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 def _db_path() -> Path:
+    """The archive this profile should read and write.
+
+    Order matters. WETNOODLE_DB_DIR is explicit. Next is the configured provider db_dir,
+    because that is the archive pre-turn recall searches: without this, the memory tool
+    wrote to <profile>/rag/rag.db while recall read db_dir, and an entry could be saved
+    "successfully" into a database nothing ever searched.
+    """
     override = os.environ.get("WETNOODLE_DB_DIR")
-    return (Path(override) / "rag.db") if override else (_profile_home() / "rag" / "rag.db")
+    if override:
+        return Path(override) / "rag.db"
+    try:
+        from hermes_cli.config import load_config
+        configured = ((load_config().get("memory") or {}).get("wetnoodle") or {}).get("db_dir")
+        if configured:
+            return Path(configured) / "rag.db"
+    except Exception:
+        pass
+    return _profile_home() / "rag" / "rag.db"
 
 
 def __getattr__(name):
@@ -78,6 +105,7 @@ class MemoryStore:
         self.db_path = Path(db_path or _db_path())
         self.repo = Path(repo or REPO)
         self._core = None
+        self.last_embed_error: Optional[str] = None
         self._ensure()
 
     # ------------------------------------------------------------------ plumbing
@@ -105,12 +133,19 @@ class MemoryStore:
         return self._core
 
     def embed(self, text: str) -> Optional[bytes]:
-        """Embed one entry with the local model; None when Ollama is unavailable."""
+        """Embed one entry with the local model; None when Ollama is unavailable.
+
+        The reason is recorded on `last_embed_error` rather than swallowed: an entry saved
+        without a vector is invisible to memory_search, and silently reporting success is
+        how a user ends up with memories that never come back.
+        """
+        self.last_embed_error = None
         try:
             core = self._embed_core()
             mat = core.embed_documents([text])[0]
             return mat.astype("float32").tobytes()
-        except Exception:
+        except Exception as e:
+            self.last_embed_error = f"{type(e).__name__}: {e}"
             return None
 
     # ------------------------------------------------------------------ writes
@@ -139,8 +174,8 @@ class MemoryStore:
         try:
             row = con.execute(
                 "SELECT id, text FROM memory_items WHERE kind=? AND superseded_by IS NULL "
-                "AND text LIKE ? ORDER BY pinned DESC, ts DESC LIMIT 1",
-                (kind, f"%{old_text.strip()}%"),
+                "AND text LIKE ? ESCAPE '\\' ORDER BY pinned DESC, ts DESC LIMIT 1",
+                (kind, _like(old_text)),
             ).fetchone()
             if not row:
                 return 0
@@ -160,12 +195,16 @@ class MemoryStore:
         try:
             row = con.execute(
                 "SELECT id, text FROM memory_items WHERE kind=? AND superseded_by IS NULL "
-                "AND text LIKE ? ORDER BY pinned DESC, ts DESC LIMIT 1",
-                (kind, f"%{old_text.strip()}%"),
+                "AND text LIKE ? ESCAPE '\\' ORDER BY pinned DESC, ts DESC LIMIT 1",
+                (kind, _like(old_text)),
             ).fetchone()
             if not row:
                 return 0
-            updated = row[1].replace(old_text, new_text, 1)
+            # The match was case-insensitive, so the replacement must be too: a literal
+            # str.replace() silently changed nothing whenever the user's case differed, and
+            # the tool still reported "Entry updated."
+            updated = re.sub(re.escape(old_text.strip()), lambda _m: new_text, row[1],
+                             count=1, flags=re.IGNORECASE)
             blob = self.embed(updated)
             with con:
                 con.execute(
@@ -179,14 +218,18 @@ class MemoryStore:
     def remove(self, kind: str, old_text: str) -> int:
         con = self._con()
         try:
-            # Escape LIKE's own wildcards. Unescaped, a short old_text containing "_" or "%"
-            # matched many entries and hard-deleted all of them.
-            needle = old_text.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             rows = con.execute(
                 "SELECT id FROM memory_items WHERE kind=? AND superseded_by IS NULL "
                 "AND text LIKE ? ESCAPE '\\'",
-                (kind, f"%{needle}%"),
+                (kind, _like(old_text)),
             ).fetchall()
+            if len(rows) > 1:
+                # Deleting on an ambiguous match is how a short substring wipes several
+                # memories at once. Refuse and let the caller name the entry precisely.
+                raise ValueError(
+                    f"{len(rows)} entries match {old_text.strip()!r}; nothing removed. "
+                    f"Give a longer, unique substring."
+                )
             if not rows:
                 return 0
             with con:

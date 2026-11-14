@@ -580,6 +580,22 @@ def reembed(batch=16):
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                 (key, str(value)),
             )
+    # memory_items hold their own vectors. Re-embedding only chunks would leave every stored
+    # memory at the old width, and MemoryStore.search then breaks on a mixed matrix.
+    try:
+        rows_m = cur.execute("SELECT id, text FROM memory_items").fetchall()
+    except sqlite3.Error:
+        rows_m = []
+    for start in range(0, len(rows_m), batch):
+        part = rows_m[start:start + batch]
+        mats = embed_documents([r[1] or "" for r in part])
+        with con:
+            for (mid, _text), vec in zip(part, mats):
+                cur.execute("UPDATE memory_items SET embedding=?, dim=? WHERE id=?",
+                            (np.asarray(vec, dtype=np.float32).tobytes(),
+                             int(np.asarray(mats).shape[1]), mid))
+        done_m = min(start + batch, len(rows_m))
+        print(f"  re-embedded {done_m}/{len(rows_m)} memory item(s)", flush=True)
     con.close()
     _CACHE.clear()
     return done
@@ -591,7 +607,7 @@ def get_dim():
     return int(get_meta("dim", 768) or 768)
 
 
-_CACHE = {"key": None, "mat": None, "meta": None}
+_CACHE: dict = {"key": None, "mat": None, "meta": None}
 
 
 def load_index():
@@ -614,7 +630,10 @@ def load_index():
         + ("IFNULL(SUM(superseded_by IS NOT NULL),0)" if has_ext else "0")
         + " FROM chunks"
     )
-    key = cur.fetchone()
+    # The model and the last write are part of the identity of the matrix: a re-embed rewrites
+    # every vector without changing a single count or id, so a warm process would keep serving
+    # the old matrix until it restarted.
+    key = tuple(cur.fetchone()) + (str(get_meta("model") or ""), str(get_meta("last_ingest") or ""), MODEL)
     # .get(), not subscripts: callers invalidate with _CACHE.clear(), which removes the keys entirely.
     # A subscript here turns a legitimate invalidation into a KeyError on the next search.
     if _CACHE.get("key") == key and _CACHE.get("mat") is not None:
@@ -639,7 +658,7 @@ def load_index():
         if len(r[8]) != dim * 4:
             raise RuntimeError(
                 f"rag.db chunk id={r[0]} has vector size {len(r[8])}B, expected {dim * 4}B "
-                "— embedding model changed; rebuild with ingest.py --full"
+                "— embedding model changed; re-embed with python -m wetnoodle.ingest --reembed"
             )
     mat = (
         np.vstack([np.frombuffer(r[8], dtype=np.float32) for r in rows])
@@ -669,7 +688,7 @@ def search(query, k=8, corpus=None, corpora=None, exclude_corpora=None, hybrid=N
     q = embed_query(query)
     if q.shape[0] != mat.shape[1]:
         raise RuntimeError(
-            f"query dim {q.shape[0]} != index dim {mat.shape[1]} — rebuild with ingest.py --full"
+            f"query dim {q.shape[0]} != index dim {mat.shape[1]} — re-embed with python -m wetnoodle.ingest --reembed"
         )
     scores = mat @ q                      # both sides L2-normalised => this is cosine
 
@@ -701,7 +720,15 @@ def search(query, k=8, corpus=None, corpora=None, exclude_corpora=None, hybrid=N
                         scores[j] = max(float(scores[j]), inherited * SUCCESSOR_BOOST)
             scores = np.where(live, scores, -np.inf)
 
-    allow = {str(c) for c in ([corpus] if corpus else []) + list(corpora or []) if c}
+    # Intersect, never union. `{corpus} | allow` let any caller that passed corpus="other"
+    # into a profile it was not allowed to read: get_chunks then refused the full text, but
+    # the 320-character snippets in the result list already carried it.
+    allow = {str(c) for c in (corpora or []) if c}
+    if corpus:
+        requested = str(corpus)
+        allow = ({requested} & allow) if allow else {requested}
+        if not allow:
+            return []
     deny = {str(c) for c in (exclude_corpora or []) if c}
     if allow or deny:
         # Scope before ranking, not after: filtering the result list means a profile whose
@@ -718,6 +745,10 @@ def search(query, k=8, corpus=None, corpora=None, exclude_corpora=None, hybrid=N
     order = np.argsort(-scores)
     if allow or deny or not include_superseded:
         order = order[np.isfinite(scores[order])]
+    if not len(order):
+        # Every chunk in scope is retired (or the scope is empty). Returning here keeps the
+        # candidate pass from reducing an empty array, which raises rather than returning [].
+        return []
 
     use_hybrid = HYBRID if hybrid is None else bool(hybrid)
     fused = None

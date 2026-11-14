@@ -160,7 +160,7 @@ def main():
     if problems:
         print(f"{len(problems)} problem(s): {', '.join(problems)}")
         return 1
-    print("all checks passed — run: python ingest.py --full")
+    print("all checks passed — run: python -m wetnoodle.ingest --full")
     return 0
 
 

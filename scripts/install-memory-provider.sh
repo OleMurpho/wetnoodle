@@ -32,13 +32,28 @@ fi
 [ -n "$HERMES_BIN" ] || die "hermes not found — put it on PATH or set HERMES_BIN"
 
 REMOVE=0
-[ "${1:-}" = "--remove" ] && { REMOVE=1; shift; }
+SCOPE=""
+SHARED=""
+ALLOW="${RAG_ALLOWED_CORPORA:-}"
+POSITIONAL=()
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --remove) REMOVE=1; shift ;;
+        --scope) SCOPE=1; shift ;;
+        --scope-shared) SHARED=1; shift ;;
+        --allow)
+            [ "$#" -ge 2 ] || die "--allow needs a value, e.g. --allow default,skill"
+            ALLOW="$2"; shift 2 ;;
+        --allow=*) ALLOW="${1#*=}"; shift ;;
+        *) POSITIONAL+=("$1"); shift ;;
+    esac
+done
 
 [ -f "$PLUGIN/__init__.py" ] || die "plugin/ not found in $ROOT — run this from the checkout"
 
 profiles=()
-if [ "$#" -gt 0 ]; then
-    profiles=("$@")
+if [ "${#POSITIONAL[@]}" -gt 0 ]; then
+    profiles=("${POSITIONAL[@]}")
 else
     [ -d "$HERMES_HOME/profiles" ] || die "no profiles under $HERMES_HOME (pass profile names)"
     for d in "$HERMES_HOME"/profiles/*/; do [ -d "$d" ] && profiles+=("$(basename "$d")"); done
@@ -49,6 +64,12 @@ echo "wetnoodle memory provider"
 echo "  repo    : $ROOT"
 echo "  hermes  : $HERMES_HOME"
 echo "  store   : $DB_DIR"
+if [ -z "$SCOPE" ] && [ -z "$SHARED" ] && [ -z "$ALLOW" ] && [ "${#profiles[@]}" -gt 1 ]; then
+    echo
+    echo "  WARNING: ${#profiles[@]} profile(s) share one store and no scope was given."
+    echo "           Pre-turn recall for each will search the others' transcripts."
+    echo "           Add --scope-shared, or --allow <corpora> for an explicit list."
+fi
 echo
 
 for p in "${profiles[@]}"; do
@@ -80,8 +101,8 @@ for p in "${profiles[@]}"; do
     "$HERMES_BIN" -p "$p" config set memory.provider wetnoodle --force >/dev/null 2>&1 || cfg_ok=0
     "$HERMES_BIN" -p "$p" config set memory.wetnoodle.repo "$ROOT" --force >/dev/null 2>&1 || cfg_ok=0
     "$HERMES_BIN" -p "$p" config set memory.wetnoodle.db_dir "$DB_DIR" --force >/dev/null 2>&1 || cfg_ok=0
-    scope_value="${RAG_ALLOWED_CORPORA:-}"
-    if [ -z "$scope_value" ] && [ -n "${RAG_SCOPE:-}" ]; then
+    scope_value="$ALLOW"
+    if [ -z "$scope_value" ] && { [ -n "$SCOPE" ] || [ -n "${RAG_SCOPE:-}" ]; }; then
         scope_value="$p,skill,notes"
     fi
     if [ -n "$scope_value" ]; then
@@ -90,7 +111,7 @@ for p in "${profiles[@]}"; do
         "$HERMES_BIN" -p "$p" config set memory.wetnoodle.corpora "$scope_value" --force >/dev/null 2>&1 || cfg_ok=0
         "$HERMES_BIN" -p "$p" config set memory.wetnoodle.exclude_corpora "" --force >/dev/null 2>&1 || cfg_ok=0
     fi
-    if [ -n "${RAG_EXCLUDE_SHARED:-}" ] && [ -z "${RAG_ALLOWED_CORPORA:-}" ]; then
+    if { [ -n "$SHARED" ] || [ -n "${RAG_EXCLUDE_SHARED:-}" ]; } && [ -z "$ALLOW" ]; then
         # Same rule as register-mcp.sh --scope-shared: hide the other profiles' transcripts,
         # keep every shared corpus.
         exclude_list=""
@@ -102,6 +123,9 @@ for p in "${profiles[@]}"; do
             exclude_list="$exclude_list,$other"
         done
         exclude_list="${exclude_list#,}"
+        # Replacing the default exclude_corpora dropped "skill", which would start injecting
+        # skill text into the pre-turn block. Keep it out of recall, still searchable via MCP.
+        exclude_list="${exclude_list:+$exclude_list,}skill"
         "$HERMES_BIN" -p "$p" config set memory.wetnoodle.corpora "" --force >/dev/null 2>&1 || cfg_ok=0
         if [ -n "$exclude_list" ]; then
             "$HERMES_BIN" -p "$p" config set memory.wetnoodle.exclude_corpora "$exclude_list" \

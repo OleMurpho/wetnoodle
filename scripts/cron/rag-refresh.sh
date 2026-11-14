@@ -38,6 +38,12 @@ cd "$SRC" || { echo "rag-refresh: cannot cd to $SRC"; exit 1; }
   || { echo "rag-refresh: $PY is not Python 3.11+ (set RAG_PYTHON)"; exit 1; }
 
 out=$("$PY" -E -s -m wetnoodle.ingest 2>&1); rc=$?
+# rc 4 means another ingest holds the lock. That is a skip, not a failure: reporting it as a
+# failed job trains the reader to ignore the alert.
+if [ $rc -eq 4 ]; then
+    echo "rag-refresh: another ingest is running; skipped this cycle"
+    exit 0
+fi
 [ $rc -ne 0 ] && { echo "rag-refresh: session ingest failed (rc=$rc)"; echo "$out"; exit $rc; }
 
 out=$("$PY" -E -s -m wetnoodle.ingest_skills 2>&1); rc=$?

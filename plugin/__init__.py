@@ -80,6 +80,11 @@ def _load_config() -> Dict[str, Any]:
 class WetnoodleMemoryProvider(MemoryProvider):
     def __init__(self, config: Optional[dict] = None):
         self._cfg = {**_load_config(), **(config or {})}
+        # Publish the archive path before anything touches memory_store or tiers: both default
+        # to <profile>/rag/rag.db, which is a different database from the one recall reads.
+        # Reading it back out of hermes config does not work either — load_config() resolves
+        # the default profile, not necessarily the one this provider is running in.
+        os.environ.setdefault("WETNOODLE_DB_DIR", str(self._cfg["db_dir"]))
         self._core = None
         self._session_id = ""
         self._last_query = ""
@@ -308,10 +313,10 @@ class WetnoodleMemoryProvider(MemoryProvider):
             pass
 
     def prefetch(self, query: str, *, session_id: str = "") -> str:
-        # No tier refresh here. rebuild-on-every-turn meant per-row UPDATEs, a write lock and
-        # three file rewrites per message -- and it contradicted this adapter's contract of
-        # never writing. `initialize()` still refreshes once per session, which is enough for
-        # a document whose inputs change at human speed.
+        # No tier refresh here. Rebuilding on every turn meant per-row UPDATEs, a write lock
+        # and three file rewrites per message, and it contradicted this adapter's contract of
+        # never writing. The tier documents are rebuilt in _render_tiers, i.e. only when
+        # serve_memory is on -- nothing in initialize() writes them.
         q = (query or "").strip()
         if len(q) < 12:
             return ""
@@ -431,6 +436,10 @@ class WetnoodleMemoryProvider(MemoryProvider):
                 msg = "Entry removed."
             else:
                 return json.dumps({"success": False, "error": f"unknown action {action!r}"})
+            warning = None
+            if getattr(store, "last_embed_error", None):
+                warning = (f"saved, but it could not be embedded ({store.last_embed_error}) — "
+                           f"memory_search will not find it until the next successful write")
             self._export()
             limit = int(self._cfg["memory_limit"] if target == "memory" else self._cfg["user_limit"])
             used = len(store.render(target, 10**9))
@@ -438,6 +447,7 @@ class WetnoodleMemoryProvider(MemoryProvider):
             return json.dumps({"success": True, "message": msg, "target": target,
                                "chars": used, "limit": limit,
                                "over_budget": over,
+                               "warning": warning,
                                "note": ("Over budget. Consolidate entries so the injected block fits."
                                         if over else "")})
         except Exception as e:

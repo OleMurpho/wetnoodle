@@ -65,7 +65,7 @@ def main():
     # returned nonsense.
     if dim and existing_rows and out_dim and out_dim != dim:
         print("refusing to import: these vectors are %d-dim but the store already holds %d-dim vectors "
-              "(export made with a different embedding model). Re-embed with ingest.py --full instead."
+              "(export made with a different embedding model). Re-embed with python -m wetnoodle.ingest --reembed instead."
               % (out_dim, dim))
         return 2
 
