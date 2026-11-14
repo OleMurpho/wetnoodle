@@ -272,6 +272,17 @@ def refresh(current_session: str | None = None) -> dict:
     return used
 
 
+def evidence_terms(text: str, limit: int = 4) -> list[str]:
+    """The words worth checking a fact's survival against.
+
+    sorted(), so the choice is the same in every process — taking the first four of a set
+    made promotion non-deterministic. An empty result is a real answer: no word is long
+    enough to be evidence, so nothing can be confirmed and the fact stays a candidate.
+    """
+    words = {w.lower().strip(".,:;()[]'\"") for w in (text or "").split() if len(w) > 5}
+    return sorted(w for w in words if w)[:limit]
+
+
 def promote(min_days: int = MATURE_DAYS) -> list[tuple[int, str]]:
     """Move facts from candidate to long once unchanged min_days and seen again afterwards."""
     ensure_schema()
@@ -286,12 +297,10 @@ def promote(min_days: int = MATURE_DAYS) -> list[tuple[int, str]]:
             stable_days = (now - changed) / 86400
             if age_days < min_days or stable_days < min_days:
                 continue
-            # sorted(), so the four terms are the same four in every process; and no terms
-            # means no evidence, not "AND ()", which is a syntax error.
-            terms = sorted({w.lower().strip(".,:;()[]'\"") for w in r["text"].split() if len(w) > 5})
-            if not terms:
+            # No terms means no evidence, not "AND ()", which is a syntax error.
+            chosen = evidence_terms(r["text"])
+            if not chosen:
                 continue
-            chosen = terms[:4]
             hit = con.execute("SELECT count(*) FROM messages WHERE timestamp > ? AND ("
                               + " OR ".join(["lower(content) LIKE ?"] * len(chosen)) + ")",
                               (changed, *[f"%{t}%" for t in chosen])).fetchone()[0]
