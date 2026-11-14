@@ -119,8 +119,8 @@ class WetnoodleMemoryProvider(MemoryProvider):
         try:
             with open(path, "a", encoding="utf-8") as fh:
                 fh.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} pid={os.getpid()} "
-                         f"module={__name__} db={self._cfg['db_dir']} repo={self._cfg['repo']} "
-                         f"-> {message}\n")
+                         f"exe={sys.executable} py={sys.version.split()[0]} module={__name__} "
+                         f"db={self._cfg['db_dir']} repo={self._cfg['repo']} -> {message}\n")
         except OSError:
             pass
 
