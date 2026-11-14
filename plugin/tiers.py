@@ -265,7 +265,16 @@ def compose(current_session: str | None = None) -> tuple[str, dict]:
     long_txt, long_used = render_long()
     tail = hand_tail()
     if tail:
+        # The tail is inside the same budget as the generated entries. Appending it blind let a
+        # 9,000-character note produce a 9,166-character composite against a 2,500 budget, with
+        # the mirror still reporting 28 used.
+        room = max(0, BUDGET["long"] - long_used)
+        if len(tail) > room:
+            keep = max(0, room - 60)
+            tail = (tail[:keep].rstrip()
+                    + "\n[hand-edited text truncated to fit the long-term budget]")
         long_txt = (long_txt + "\n\n" + tail).strip()
+        long_used += len(tail)
     mid_txt, mid_used = render_middle(current_session)
     short_txt, short_used = render_short(current_session)
     used = {"long": long_used, "middle": mid_used, "short": short_used}

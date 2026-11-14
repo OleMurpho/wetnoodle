@@ -49,6 +49,12 @@ fi
 [ $rc -ne 0 ] && { echo "rag-refresh: session ingest failed (rc=$rc)"; echo "$out"; exit $rc; }
 
 out=$("$PY" -E -s -m wetnoodle.ingest_skills 2>&1); rc=$?
-[ $rc -ne 0 ] && { echo "rag-refresh: skill ingest failed (rc=$rc)"; echo "$out"; exit $rc; }
+# rc 4 = another ingest holds the lock. Same skip semantics as the session pass above; calling it
+# a failure trains the reader to ignore the alert.
+if [ $rc -eq 4 ]; then
+    echo "rag-refresh: another ingest is running; skipped the skill pass"
+else
+    [ $rc -ne 0 ] && { echo "rag-refresh: skill ingest failed (rc=$rc)"; echo "$out"; exit $rc; }
+fi
 
 exit 0

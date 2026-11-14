@@ -97,7 +97,7 @@ SHIM
 
     if [ -n "$job_id" ]; then
         if "$HERMES_BIN" -p "$p" cron edit "$job_id" --name "$JOB_NAME" --script "$(basename "$shim")" \
-              --schedule "$SCHEDULE" --no-agent "${deliver_args[@]}" >/dev/null 2>&1; then
+              --schedule "$SCHEDULE" --no-agent "${deliver_args[@]+"${deliver_args[@]}"}" >/dev/null 2>&1; then
             echo "  $p: updated job $job_id ($SCHEDULE, store=$db_dir)"
         else
             echo "  $p: job $job_id exists but could not be updated — run 'hermes -p $p cron edit $job_id' by hand"
@@ -106,7 +106,7 @@ SHIM
         if out="$("$HERMES_BIN" -p "$p" cron create "$SCHEDULE" \
                    "wetnoodle refresh watchdog: incremental ingest of every session corpus plus skills. Silent unless it fails." \
                    --name "$JOB_NAME" --script "$(basename "$shim")" --no-agent \
-                   "${deliver_args[@]}" 2>&1)"; then
+                   "${deliver_args[@]+"${deliver_args[@]}"}" 2>&1)"; then
             echo "  $p: created job ($SCHEDULE, store=$db_dir)"
         else
             echo "  $p: could not create the job: $(echo "$out" | tail -1)"

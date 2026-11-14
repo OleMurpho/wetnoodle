@@ -315,6 +315,12 @@ def split_piece(text):
     return [p for p in pieces if p.strip()]
 
 
+def _chunk_hash(text):
+    """Stable identity for a chunk's text, used to tell sibling pieces apart."""
+    import hashlib
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()[:16]
+
+
 def source_messages(path, skip_through=0):
     """User+assistant corpus rows from ONE session db, read-only, id-ordered:
     (id, session_id, role, ts, content, source)."""
@@ -473,6 +479,7 @@ def commit_ingest(rows, watermarks, dim, delete_corpora=()):
     con = sqlite3.connect(RAG_DB)
     cur = con.cursor()
     cur.execute("PRAGMA busy_timeout=5000")
+    report_retirements = (0, 0)
     try:
         with con:
             # A full rebuild deletes and re-inserts chunks under new ids, so a retirement that
@@ -490,13 +497,16 @@ def commit_ingest(rows, watermarks, dim, delete_corpora=()):
                     "SELECT key, value FROM meta WHERE key LIKE 'supersede_reason:%'").fetchall())
                 for corpus in delete_corpora:
                     old = cur.execute(
-                        "SELECT id, session_id, msg_start, msg_end, superseded_by, superseded_at "
-                        "FROM chunks WHERE corpus=?", (corpus,)).fetchall()
-                    id_key = {r[0]: (r[1], r[2], r[3]) for r in old}
+                        "SELECT id, session_id, msg_start, msg_end, superseded_by, superseded_at, "
+                        "content FROM chunks WHERE corpus=?", (corpus,)).fetchall()
+                    # A long message is split across several chunks that share the same
+                    # (session, msg_start, msg_end); without content in the key, retiring the
+                    # last piece would retire the first one after a rebuild.
+                    key_of = {r[0]: (corpus, r[1], r[2], r[3], _chunk_hash(r[6])) for r in old}
                     for r in old:
                         if r[4] is not None:
-                            retired[(corpus, r[1], r[2], r[3])] = (
-                                r[0], id_key.get(r[4]), r[5],
+                            retired[key_of[r[0]]] = (
+                                r[0], key_of.get(r[4]), r[5],
                                 reasons.get(f"supersede_reason:{r[0]}"))
 
             for corpus in delete_corpora:
@@ -520,30 +530,36 @@ def commit_ingest(rows, watermarks, dim, delete_corpora=()):
                         "VALUES(?,?,?,?,?,?,?,?,?,?)",
                         wide,
                     )
-            for key, (old_id, succ_key, when, reason) in retired.items():
-                corpus = key[0]
-                fresh = cur.execute(
-                    "SELECT id FROM chunks WHERE corpus=? AND session_id=? AND msg_start=? "
-                    "AND msg_end=? LIMIT 1", key).fetchone()
-                if reason is not None:
-                    cur.execute("DELETE FROM meta WHERE key=?", (f"supersede_reason:{old_id}",))
-                if not fresh:
-                    continue
-                succ_id = RETIRED_NO_SUCCESSOR
-                if succ_key:
-                    succ = cur.execute(
-                        "SELECT id FROM chunks WHERE corpus=? AND session_id=? AND msg_start=? "
-                        "AND msg_end=? LIMIT 1", (corpus,) + tuple(succ_key)).fetchone()
-                    if succ:
-                        succ_id = succ[0]
-                cur.execute(
-                    "UPDATE chunks SET superseded_by=?, superseded_at=? WHERE id=?",
-                    (succ_id, when, fresh[0]))
-                if reason is not None:
+            if retired:
+                fresh_keys = {}
+                for corpus in delete_corpora:
+                    for r in cur.execute(
+                        "SELECT id, session_id, msg_start, msg_end, content FROM chunks "
+                        "WHERE corpus=?", (corpus,)
+                    ).fetchall():
+                        fresh_keys[(corpus, r[1], r[2], r[3], _chunk_hash(r[4]))] = r[0]
+                applied = dropped = 0
+                for key, (old_id, succ_key, when, reason) in retired.items():
+                    if reason is not None:
+                        cur.execute("DELETE FROM meta WHERE key=?",
+                                    (f"supersede_reason:{old_id}",))
+                    new_id = fresh_keys.get(key)
+                    if new_id is None:
+                        dropped += 1
+                        continue
+                    succ_id = RETIRED_NO_SUCCESSOR
+                    if succ_key and fresh_keys.get(succ_key):
+                        succ_id = fresh_keys[succ_key]
                     cur.execute(
-                        "INSERT INTO meta(key, value) VALUES(?,?) "
-                        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                        (f"supersede_reason:{fresh[0]}", reason))
+                        "UPDATE chunks SET superseded_by=?, superseded_at=? WHERE id=?",
+                        (succ_id, when, new_id))
+                    if reason is not None:
+                        cur.execute(
+                            "INSERT INTO meta(key, value) VALUES(?,?) "
+                            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                            (f"supersede_reason:{new_id}", reason))
+                    applied += 1
+                report_retirements = (applied, dropped)
 
             for corpus, mark in (watermarks or {}).items():
                 cur.execute(
@@ -564,6 +580,11 @@ def commit_ingest(rows, watermarks, dim, delete_corpora=()):
                 )
     finally:
         con.close()
+    applied, dropped = report_retirements
+    if applied or dropped:
+        # Silence would leave an operator unable to tell a clean rebuild from one that quietly
+        # gave up on retirements whose text had changed.
+        print(f"  retirements: {applied} re-applied, {dropped} dropped (text no longer present)")
 
 
 def stored_model():
@@ -1052,8 +1073,12 @@ def audit():
             try:
                 con = sqlite3.connect(f"file:{desc['path']}?mode=ro", uri=True)
                 row = con.execute(
+                    # Same predicate as source_messages(): a tool-call-only assistant message
+                    # has no content, is never indexed, and would otherwise keep
+                    # source_max_msg_id permanently ahead of the watermark.
                     "SELECT MAX(timestamp), MAX(id), COUNT(*) FROM messages "
-                    "WHERE role IN ('user','assistant')"
+                    "WHERE role IN ('user','assistant') AND content IS NOT NULL "
+                    "AND length(trim(content)) > 0"
                 ).fetchone()
                 con.close()
                 entry.update(
@@ -1064,7 +1089,10 @@ def audit():
                     fresh=(entry["max_msg_end"] or 0) >= (row[1] or 0),
                 )
             except sqlite3.Error as e:
-                entry.update(available=False, error=f"{type(e).__name__}: {e}", fresh=None)
+                # Distinct from frozen: the database is there but cannot be read, which is
+                # what a Hermes schema change looks like from here. The watchdog reports this.
+                entry.update(available=False, broken=True,
+                             error=f"{type(e).__name__}: {e}", fresh=None)
         elif desc:
             entry.update(available=True, fresh=None)
         else:
@@ -1073,6 +1101,7 @@ def audit():
                 available=False,
                 fresh=None,
                 error="source corpus missing — frozen; history retained",
+                frozen=True,
             )
         corpora[key] = entry
 

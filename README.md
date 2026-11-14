@@ -163,8 +163,11 @@ rather than refused, because "it exists but you may not read it" is itself a dis
 
 Injection is gated: a passage is only injected when it clears `score_floor` (0.62 by default) and, if set, a
 margin over the next candidate, so most turns add nothing. Writes still go through the core memory tool and
-are mirrored into the archive, so `MEMORY.md` stays the file you can read and edit by hand. Restart the
-gateway after installing; `hermes -p <profile> memory status` says whether it loaded.
+are mirrored into the archive, so `MEMORY.md` stays readable on disk. With `serve_memory` off it is yours to
+edit freely. With `serve_memory` on it is generated on every refresh, and hand-written text must sit below
+the `<!-- hand-edited below this line -->` marker in `MEMORY.long.md` or the next refresh discards it —
+that text is kept verbatim and counted against the same budget as the rest of the long-term section.
+Restart the gateway after installing; `hermes -p <profile> memory status` says whether it loaded.
 
 ## How a search works
 

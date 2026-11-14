@@ -23,6 +23,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HERMES_BIN="${HERMES_BIN:-$(command -v hermes || true)}"
 [ -z "$HERMES_BIN" ] && [ -x "$HOME/.local/bin/hermes" ] && HERMES_BIN="$HOME/.local/bin/hermes"
+HERMES_HOME="${RAG_HERMES_HOME:-$HOME/.hermes}"
 
 PROFILES=()
 SCOPE_ARGS=()
@@ -56,8 +57,15 @@ echo "  scope   : ${SCOPE_ARGS[*]:-open (every corpus visible; use --scope-share
 
 # Several profiles on one store with no scope is the configuration that lets agents read each
 # other's transcripts, and it is the one an unattended install will silently produce.
-if [ "${#PROFILES[@]}" -gt 1 ] && [ "${#SCOPE_ARGS[@]}" -eq 0 ]; then
-    die "installing ${#PROFILES[@]} profiles with no scope shares every transcript between them.
+existing=0
+if [ -d "$HERMES_HOME/profiles" ]; then
+    existing=$(find "$HERMES_HOME/profiles" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+fi
+# Installing one profile at a time is how a store ends up shared without anyone deciding it:
+# count what exists, not just what this invocation names.
+if [ $(( existing + ${#PROFILES[@]} )) -gt 1 ] && [ "${#SCOPE_ARGS[@]}" -eq 0 ]; then
+    die "this store would end up serving $(( existing + ${#PROFILES[@]} )) profiles with no scope,
+       which shares every transcript between them.
        Pass --scope-shared (hide the other profiles, keep skills and imports) or
        --scope (each profile sees only its own corpus), or install one profile at a time."
 fi
