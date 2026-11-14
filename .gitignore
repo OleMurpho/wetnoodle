@@ -13,3 +13,6 @@ eval/questions.local.json
 __pycache__/
 *.pyc
 .env
+
+# generated per install by scripts/register-mcp.sh
+bin/

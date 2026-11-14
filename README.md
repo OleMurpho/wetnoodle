@@ -1,25 +1,5 @@
 # wetnoodle
 
-> ### Requirements — you need **both** Hermes Agent and Ollama
->
-> This is not a standalone app. It reads Hermes Agent's own session databases (there is nothing to index
-> without Hermes), and it embeds with a **local Ollama** model (there is no fallback and no cloud API).
-> Minimum: Hermes Agent with at least one profile, Ollama running locally, and `nomic-embed-text` pulled.
-> Python 3.11+ is the third piece. If you have only one of the two, stop here — it will ingest nothing.
-
-> ### ⚠️ Experimental software — watch the machine it runs on
->
-> wetnoodle is a personal project, not a product. It has no support contract, no warranty, and it has
-> already broken a host: on 2026-10-19 a scheduled ingest pinned all 20 threads of a laptop, the WSL VM
-> grew until Windows stopped responding, and the agent gateway on it crashed. Nobody was hurt and nothing
-> was lost, because the owner caught it.
->
-> **Ingesting is CPU-heavy.** One embedding request can saturate every core it can see. So: run the first
-> index with a monitor open (`top`, Task Manager), keep it on `cron/refresh-with-ollama.sh` (pins the
-> embedder to 4 cores at low priority and stops the daemon afterwards), and do not schedule it more often
-> than every two hours. Read [`docs/troubleshooting.md`](docs/troubleshooting.md#running-on-a-laptop-or-inside-wsl)
-> before putting it on a laptop you need.
-
 A local memory archive for [Hermes Agent](https://hermes-agent.nousresearch.com/docs). It indexes every
 profile's session database — plus every `SKILL.md` you own — into one small vector store, so an agent can
 answer *"what did we decide about X three weeks ago"* instead of only seeing what is still in its context
@@ -51,6 +31,9 @@ here is for a design that is *more correct*, not for numbers we could not reprod
 
 ## Start here
 
+**Already running Hermes?** You still need step 1 (Ollama), then steps 2 and 4 — the registration script
+attaches this archive to the agents you already have. Nothing else changes.
+
 **You need all three.** Python 3.11+, a local Ollama daemon, and the `nomic-embed-text` model.
 
 ```bash
@@ -79,16 +62,16 @@ four-year-old graphics card, several times slower on the CPU alone. You should e
 A good result names the passage, its date, its profile and its score. If it says *no hits*, the index is
 empty — run `python doctor.py`, which names the exact fix.
 
-```yaml
-# 4. Let the agent use it — this goes in Hermes config.yaml (YAML, no braces)
-mcp_servers:
-  wetnoodle:
-    command: /absolute/path/to/wetnoodle/.venv/bin/python
-    args: [/absolute/path/to/wetnoodle/mcp_server.py]
+```bash
+# 4. Let an existing Hermes agent use it
+./scripts/register-mcp.sh          # every profile it can find
+./scripts/register-mcp.sh work     # or only the ones you name
 ```
 
-Use the **absolute** interpreter path; a system `python` has no `numpy` or `mcp`. Restart the gateway (or
-start a new session) and three tools appear: `rag_search`, `rag_open`, `rag_audit`.
+It writes a `bin/rag-mcp` wrapper — which strips inherited `PYTHON*`, so the agent's own interpreter
+cannot leak its site-packages into this venv — then registers `mcp_servers.wetnoodle` on each profile.
+No hand-editing YAML, and re-running it is safe. Restart the gateway or start a new session, and three
+tools appear: `rag_search`, `rag_open`, `rag_audit`.
 
 ```bash
 # 5. Keep it current — every two hours, off the hour, silent unless it fails
@@ -233,6 +216,20 @@ Marker-based recall scoring, bounded output, text export/rebuild and the job-run
 from [tomRumi/hermes-memory-rag](https://github.com/tomRumi/hermes-memory-rag) (MIT), which solves the adjacent
 problem of curated project memory. No code was copied; the mechanisms were reimplemented against this store
 and independently measured.
+
+## Requirements and status
+
+The small print, kept short and kept at the bottom where it belongs.
+
+- **Hermes Agent with at least one profile, plus a local Ollama** running `nomic-embed-text` (768d). There is
+  no cloud fallback and no second backend — Cloud Ollama cannot embed. Python 3.11+.
+- **Ingesting is CPU-heavy.** One embedding request can saturate every core it can see. `RAG_NUM_THREADS`
+  defaults to `min(4, nproc)`, and `cron/refresh-with-ollama.sh` pins the embedder to four cores at nice 19
+  and stops the daemon afterwards. Keep the first index supervised and schedule refreshes no more than every
+  two hours. Details: [`docs/troubleshooting.md`](docs/troubleshooting.md#running-on-a-laptop-or-inside-wsl).
+- **A personal project, not a product.** No warranty, no support contract. It has broken a host once: a
+  scheduled ingest pinned all 20 threads of a laptop, the WSL VM grew until Windows stopped responding, and
+  the agent gateway on it crashed. Nothing was lost, and that incident is why the thread cap exists.
 
 ## Licence
 
