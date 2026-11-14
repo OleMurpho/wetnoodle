@@ -53,20 +53,7 @@ def _paths() -> dict:
     prof = _profile_home()
     mem = prof / "memories"
     override = os.environ.get("WETNOODLE_DB_DIR")
-    if override:
-        db = Path(override) / "rag.db"
-    else:
-        # Follow the configured provider store, or the tier documents are built from a
-        # different database than the one recall searches.
-        db = None
-        try:
-            from hermes_cli.config import load_config
-            configured = ((load_config().get("memory") or {}).get("wetnoodle") or {}).get("db_dir")
-            if configured:
-                db = Path(configured) / "rag.db"
-        except Exception:
-            pass
-        db = db or (prof / "rag" / "rag.db")
+    db = (Path(override) / "rag.db") if override else (prof / "rag" / "rag.db")
     return {
         "DB": db,
         "STATE": prof / "state.db",

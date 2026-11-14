@@ -80,11 +80,9 @@ def _load_config() -> Dict[str, Any]:
 class WetnoodleMemoryProvider(MemoryProvider):
     def __init__(self, config: Optional[dict] = None):
         self._cfg = {**_load_config(), **(config or {})}
-        # Publish the archive path before anything touches memory_store or tiers: both default
-        # to <profile>/rag/rag.db, which is a different database from the one recall reads.
-        # Reading it back out of hermes config does not work either — load_config() resolves
-        # the default profile, not necessarily the one this provider is running in.
-        os.environ.setdefault("WETNOODLE_DB_DIR", str(self._cfg["db_dir"]))
+        # Do NOT export db_dir as WETNOODLE_DB_DIR: that pointer means "where this profile's
+        # memory lives", and pointing it at the shared archive would put every agent's
+        # memories in one table.
         self._core = None
         self._session_id = ""
         self._last_query = ""
@@ -160,8 +158,10 @@ class WetnoodleMemoryProvider(MemoryProvider):
             if here not in sys.path:
                 sys.path.insert(0, here)
             from memory_store import MemoryStore
-            self._ms = MemoryStore(db_path=Path(self._cfg["db_dir"]) / "rag.db",
-                                   repo=Path(self._cfg["repo"]))
+            # Profile-local, NOT db_dir. memory_items mirror this profile's MEMORY.md and
+            # USER.md, and a shared table would inject one agent's memories into another's
+            # block. db_dir is the shared transcript archive the search tools read.
+            self._ms = MemoryStore(db_path=None, repo=Path(self._cfg["repo"]))
         return self._ms
 
     def _render_block(self, kind: str) -> str:

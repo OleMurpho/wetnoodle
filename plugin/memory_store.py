@@ -49,24 +49,15 @@ def _like(needle: str) -> str:
 
 
 def _db_path() -> Path:
-    """The archive this profile should read and write.
+    """Where this profile's memory entries live.
 
-    Order matters. WETNOODLE_DB_DIR is explicit. Next is the configured provider db_dir,
-    because that is the archive pre-turn recall searches: without this, the memory tool
-    wrote to <profile>/rag/rag.db while recall read db_dir, and an entry could be saved
-    "successfully" into a database nothing ever searched.
+    Profile-local on purpose. These rows mirror MEMORY.md and USER.md, which belong to one
+    profile; the shared archive in db_dir holds transcripts, and its chunks are what search
+    reads. Keeping the two apart is what stops one agent's memories appearing in another's
+    injected block.
     """
     override = os.environ.get("WETNOODLE_DB_DIR")
-    if override:
-        return Path(override) / "rag.db"
-    try:
-        from hermes_cli.config import load_config
-        configured = ((load_config().get("memory") or {}).get("wetnoodle") or {}).get("db_dir")
-        if configured:
-            return Path(configured) / "rag.db"
-    except Exception:
-        pass
-    return _profile_home() / "rag" / "rag.db"
+    return Path(override) / "rag.db" if override else _profile_home() / "rag" / "rag.db"
 
 
 def __getattr__(name):
