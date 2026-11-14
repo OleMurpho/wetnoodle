@@ -171,12 +171,9 @@ Two defences, both cheap: freeze the corpus you measure against (a copy of the s
 never debug the eval text in the archive you will measure. If a number improves after the eval set has been
 discussed, suspect the corpus before believing the improvement.
 
-## The demo corpus, measured
+## A fifth trap: clean prose flatters the measurement
 
-The browser demo indexes 5,677 PubMed abstracts. Taking 59 real titles from that corpus and keeping the 46
-long enough to be a fair query, **30 of the 46 retrieved their own abstract in the top three**; the worst
-title in the sample landed at rank 5,471 of 5,677.
-
-That number is why the demo's question sets are hand-picked and labelled as curation. Clean, single-topic
-prose is the easy case: it flatters a retrieval system. A conversation archive is the hard case, and that is
-where the honest figure is six of nineteen at first position.
+Retrieval looks far better on clean, single-topic documents than on conversation turns. Measured on tidy
+prose, a system can look like it almost never misses; the same system on a conversation archive will hand
+back near-misses that share the vocabulary and not the fact. Measure against the archive you actually run,
+and treat any result obtained on tidy text as a ceiling rather than a forecast.
