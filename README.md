@@ -65,13 +65,24 @@ YAML, and re-running it is safe. Restart the gateway or start a new session, and
 `rag_search`, `rag_open`, `rag_audit`.
 
 ```bash
-# 5. Keep it current — every two hours, off the hour, silent unless it fails
-17 */2 * * * /absolute/path/to/wetnoodle/scripts/cron/refresh-with-ollama.sh
+# 5. Keep it current — a Hermes cron job, every thirty minutes, silent unless it fails
+./scripts/install-refresh-job.sh -p <profile>
 ```
 
-`refresh-with-ollama.sh` is the one to schedule: it starts Ollama pinned to four cores at nice 19, runs the
-refresh under the same limits, and stops the daemon afterwards. Set `WETNOODLE_CPUS` if four is wrong for
-your machine. In Hermes you can schedule the same script with the `cronjob` tool instead of crontab.
+That installs the watchdog where Hermes can find it and creates the job, or updates the one that is already
+there, so running it twice is harmless. It reads the archive path out of that profile's configuration rather
+than assuming one, which is what makes the same command correct on every host. The watchdog itself lives in
+this checkout at `scripts/cron/rag_auto_ingest.sh`; the file it writes into the profile is a three-line shim
+that pins this machine's paths and execs the checkout copy, so an edit to the watchdog reaches every machine
+on its next pull instead of drifting per host.
+
+The job prints nothing when the refresh succeeds. That silence is the design: a watchdog that reports every
+half hour is a watchdog nobody reads. On failure it prints the error and the last lines of the refresh output.
+
+If you are not using Hermes cron, schedule `scripts/cron/refresh-with-ollama.sh` from crontab instead. It
+starts Ollama pinned to four cores at nice 19, runs the refresh under the same limits, and stops the daemon
+afterwards; set `WETNOODLE_CPUS` if four is wrong for your machine. The two paths do the same work, so pick
+one.
 
 **If something is wrong**, `./.venv/bin/python -m wetnoodle.doctor` preflights every dependency and prints the fix —
 including whether this machine is the thread-rich, memory-poor shape that saturates (it will tell you if you
@@ -84,7 +95,7 @@ are inside WSL, and whether anything is capping core count). Less common problem
 wetnoodle/        the package: rag_core and render, plus one module per command
 plugin/           the optional Hermes memory provider (pre-turn recall)
 scripts/          bootstrap, MCP registration, hygiene gate, chart rendering, sweeps
-scripts/cron/     the two refresh scripts
+scripts/cron/     the refresh work and the watchdog that schedules it
 tests/            smoke tests, no Ollama required
 eval/             question sets for eval_recall.py
 docs/             troubleshooting, model notes, roadmap, and the README images
@@ -182,12 +193,13 @@ answer of its own. Exact method and numbers: [`docs/models.md`](docs/models.md).
 | `python -m wetnoodle.retire c1234 --by c1250` | retire a chunk, naming the one that replaces it |
 | `python -m wetnoodle.ingest_skills` | index every `SKILL.md` |
 | `python -m wetnoodle.query "text" [-k N] [--corpus C]` | search from the shell |
+| `./scripts/install-refresh-job.sh -p <profile>` | install or update the refresh watchdog as a Hermes cron job |
 | `python -m wetnoodle.eval_recall` | retrieval gate: where each known answer comes back |
 | `python -m wetnoodle.eval_recall --verify-markers` | is each eval marker actually present? |
 | `python -m wetnoodle.export_store --corpus X --out f.jsonl` | corpus → text (portable, diffable) |
 | `python -m wetnoodle.import_store f.jsonl --corpus peer` | text → corpus (re-embedded locally) |
 | `python -m wetnoodle.doctor` | preflight every dependency, and warn about machine shape |
-| `./scripts/cron/refresh-with-ollama.sh` | pinned, low-priority refresh (the one to schedule) |
+| `./scripts/cron/refresh-with-ollama.sh` | pinned, low-priority refresh (the crontab alternative) |
 | `python -E -m unittest discover -s tests -q` | smoke test, no Ollama needed (`-E` ignores a stray `PYTHONPATH`) |
 
 ## Settings
