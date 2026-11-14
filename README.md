@@ -192,8 +192,9 @@ exactly one passage. Nineteen were locked away while the system was built and ne
 
 On the fixed **2,000-passage comparison set** behind that chart — the set every setting in this project was
 measured against — **six of nineteen** put the right passage first, and in **seventeen of nineteen** the answer
-was already among the twenty candidates. On a full 7,674-passage archive the same shipped default does slightly
-better, because there is more context to match: **nine of nineteen** first, **sixteen of nineteen** available.
+was already among the twenty candidates. On a full 7,674-passage archive the same shipped default was first
+**nine of nineteen** times and had the answer available **sixteen of nineteen**. That is a three-question
+difference on nineteen questions — treat it as noise, not as evidence that a bigger archive helps.
 
 Those are different corpora, and quoting one as if it were the other is how a benchmark stops meaning
 anything. Search succeeds at *finding* and fails at *choosing* between near-misses, which is why `rag_search`
