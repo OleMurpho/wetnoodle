@@ -336,6 +336,30 @@ class SmokeTest(unittest.TestCase):
             core.RAG_DB = old
             core._CACHE.clear()
 
+    def test_18_retire_refuses_a_successor_that_does_not_exist(self):
+        """Pointing a chunk at a missing id retires it, but the successor boost can never fire."""
+        old = core.RAG_DB
+        tmp = tempfile.mkdtemp()
+        core.RAG_DB = os.path.join(tmp, "rag.db")
+        try:
+            core.init_db()
+            core.commit_ingest([(0, 1, "s", "user", 1.0, "t", "text", _vec("a").tobytes(), "c")],
+                               {}, DIM)
+            cid = sqlite3.connect(core.RAG_DB).execute("SELECT id FROM chunks").fetchone()[0]
+            from wetnoodle import retire
+            with self.assertRaises(SystemExit):
+                retire.main([f"c{cid}", "--by", "c999999"])
+            row = sqlite3.connect(core.RAG_DB).execute(
+                "SELECT superseded_by FROM chunks WHERE id=?", (cid,)).fetchone()
+            self.assertIsNone(row[0], "a refused retirement must not change the row")
+            self.assertEqual(retire.main([f"c{cid}"]), 0)
+            row = sqlite3.connect(core.RAG_DB).execute(
+                "SELECT superseded_by FROM chunks WHERE id=?", (cid,)).fetchone()
+            self.assertEqual(int(row[0]), core.RETIRED_NO_SUCCESSOR)
+        finally:
+            core.RAG_DB = old
+            core._CACHE.clear()
+
     def test_14_doctor_warns_about_wsl_and_unlimited_affinity(self):
         """The machine-shape warning is what would have prevented the outage report."""
         from wetnoodle import doctor

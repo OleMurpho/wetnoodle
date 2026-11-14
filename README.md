@@ -118,6 +118,22 @@ a second, drifting copy of the code, and it sets the three keys the provider nee
 | `memory.wetnoodle.repo` | the checkout | where `wetnoodle/rag_core.py` lives |
 | `memory.wetnoodle.db_dir` | the store | which archive is read — it defaults to `~/.wetnoodle`, which is not always the one the MCP tools serve |
 
+### Every profile shares one store
+
+On a machine running several agents, each profile's transcripts are ingested into the same archive under
+its own corpus name, and by default every profile can read all of them: pre-turn recall for one agent will
+happily surface another's private conversation. Both halves of the integration take a scope:
+
+```bash
+./scripts/register-mcp.sh --scope                    # MCP: <profile>, skill, notes
+./scripts/install-memory-provider.sh --scope         # provider: same allowlist
+./scripts/register-mcp.sh --allow default,skill      # or one explicit list for everyone
+```
+
+The scope is enforced inside search and inside `rag_open`, not by filtering results afterwards, so `k`
+is spent on chunks the caller is allowed to see. A ref from outside the scope is reported as missing
+rather than refused, because "it exists but you may not read it" is itself a disclosure.
+
 Injection is gated: a passage is only injected when it clears `score_floor` (0.62 by default) and, if set, a
 margin over the next candidate, so most turns add nothing. Writes still go through the core memory tool and
 are mirrored into the archive, so `MEMORY.md` stays the file you can read and edit by hand. Restart the
@@ -158,6 +174,7 @@ answer of its own. Exact method and numbers: [`docs/models.md`](docs/models.md).
 | `python ingest.py --full` | rebuild available corpora from scratch |
 | `python ingest.py --reembed` | re-embed every stored chunk after a model switch |
 | `python -m wetnoodle.ingest --purge-missing` | drop corpora whose source database is gone |
+| `python -m wetnoodle.retire c1234 --by c1250` | retire a chunk, naming the one that replaces it |
 | `python -m wetnoodle.ingest_skills` | index every `SKILL.md` |
 | `python -m wetnoodle.query "text" [-k N] [--corpus C]` | search from the shell |
 | `python -m wetnoodle.eval_recall` | retrieval gate: where each known answer comes back |

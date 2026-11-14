@@ -26,6 +26,7 @@ import json
 import os
 import sqlite3
 import time
+import urllib.error
 import urllib.request
 
 import re
@@ -185,15 +186,21 @@ def _tokens(text):
     return [t for t in re.findall(r"[a-z0-9_.:+-]{3,}", (text or "").lower()) if t not in _STOP]
 
 
-def keyword_scores(query, meta):
-    """Fraction of distinct query terms present in each chunk. None when the query has no usable terms."""
+def keyword_scores(query, meta, idx=None):
+    """Fraction of distinct query terms present in each chunk. None when the query has no usable terms.
+
+    `idx` restricts the work to those rows. Search only blends keyword overlap into its candidate
+    window, so scoring all ~10k chunks per query spent almost all of it on rows that were then
+    discarded.
+    """
     toks = _tokens(query)
     if not toks:
         return None
-    out = np.empty(len(meta), dtype=np.float32)
-    for i, m in enumerate(meta):
-        c = (m.get("content") or "").lower()
-        out[i] = sum(1 for t in toks if t in c) / float(len(toks))
+    rows = range(len(meta)) if idx is None else idx
+    out = np.empty(len(rows), dtype=np.float32)
+    for n, i in enumerate(rows):
+        c = (meta[int(i)].get("content") or "").lower()
+        out[n] = sum(1 for t in toks if t in c) / float(len(toks))
     return out
 
 
@@ -201,10 +208,8 @@ def keyword_scores(query, meta):
 # ollama
 # --------------------------------------------------------------------------- #
 def _post(path, payload, timeout=120):
-    if not ollama_up():
-        raise RuntimeError(
-            f"Ollama daemon not reachable at {OLLAMA} — start ollama.service"
-        )
+    # No health check before the request: it doubled the round trips of an ingest, and the
+    # connection error below already tells us the daemon is down. The message is unchanged.
     req = urllib.request.Request(
         OLLAMA + path,
         data=json.dumps(payload).encode(),
@@ -221,6 +226,14 @@ def _post(path, payload, timeout=120):
         except Exception:
             pass
         raise RuntimeError(f"Ollama API returned {e.code}: {body}")
+    except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
+        # The check `_post` used to make before every call, but only when it is true. A timeout
+        # is reported as a timeout: the daemon may be up and simply busy.
+        if isinstance(e, TimeoutError) or "timed out" in str(e).lower():
+            raise RuntimeError(f"Ollama at {OLLAMA} did not answer within {timeout}s") from e
+        raise RuntimeError(
+            f"Ollama daemon not reachable at {OLLAMA} — start ollama.service"
+        ) from e
 
 
 def ollama_up(timeout=5):
@@ -637,8 +650,8 @@ def load_index():
     return mat, meta
 
 
-def search(query, k=8, corpus=None, hybrid=None, include_superseded=False,
-           importance_weight=None):
+def search(query, k=8, corpus=None, corpora=None, exclude_corpora=None, hybrid=None,
+           include_superseded=False, importance_weight=None):
     """Rank chunks against a query.
 
     include_superseded=False (default) drops any memory a newer one replaced, so a corrected
@@ -688,15 +701,22 @@ def search(query, k=8, corpus=None, hybrid=None, include_superseded=False,
                         scores[j] = max(float(scores[j]), inherited * SUCCESSOR_BOOST)
             scores = np.where(live, scores, -np.inf)
 
-    if corpus:
-        # Scope first, then rank. This used to be accepted and ignored — it only skipped the quota path —
-        # so a call that asked for one corpus silently returned the whole archive.
-        mask = np.fromiter((str(m.get("corpus")) == corpus for m in meta), dtype=bool, count=len(meta))
+    allow = {str(c) for c in ([corpus] if corpus else []) + list(corpora or []) if c}
+    deny = {str(c) for c in (exclude_corpora or []) if c}
+    if allow or deny:
+        # Scope before ranking, not after: filtering the result list means a profile whose
+        # allowance is narrow gets whatever k survivors the whole archive left behind, and
+        # often nothing at all. Masking here keeps k meaningful inside the scope.
+        def _permitted(entry):
+            name = str(entry.get("corpus"))
+            return (not allow or name in allow) and name not in deny
+
+        mask = np.fromiter((_permitted(m) for m in meta), dtype=bool, count=len(meta))
         if not mask.any():
             return []
         scores = np.where(mask, scores, -np.inf)
     order = np.argsort(-scores)
-    if corpus or not include_superseded:
+    if allow or deny or not include_superseded:
         order = order[np.isfinite(scores[order])]
 
     use_hybrid = HYBRID if hybrid is None else bool(hybrid)
@@ -707,10 +727,10 @@ def search(query, k=8, corpus=None, hybrid=None, include_superseded=False,
         # RRF then ranks that tied noise above good vector hits). Within a candidate set the vector top-k
         # is always present, so reordering cannot lose a hit — it can only move a marker upward.
         cand = order[:max(k * 8, 64)]
-        kw = keyword_scores(query, meta)
+        kw = keyword_scores(query, meta, cand)     # candidates only: the blend never reads the rest
         if kw is not None and kw.max() > 0:
             vc = scores[cand]
-            kc = kw[cand]
+            kc = kw
             vspan = float(vc.max() - vc.min()) or 1.0
             kspan = float(kc.max() - kc.min()) or 1.0
             vn = (vc - vc.min()) / vspan
@@ -856,12 +876,16 @@ def fmt_date(ts):
 # --------------------------------------------------------------------------- #
 # audit
 # --------------------------------------------------------------------------- #
-def get_chunks(ids):
+def get_chunks(ids, corpora=None, exclude_corpora=None):
     """Fetch chunks by id, preserving the caller's order. Used by the agent to open the candidates it chose.
 
     Refs are `c<rowid>`; a bare integer is accepted too. Missing ids are reported rather than skipped
     silently, because an agent that asked for a passage and got nothing back would quietly answer from
     memory instead.
+
+    A ref outside the caller's corpora is reported as missing, not refused with a distinct error:
+    saying "that exists but you may not read it" is itself a disclosure. Search is scoped, but an
+    agent can hold a ref from an earlier call or guess one, so the gate belongs here too.
     """
     wanted, seen = [], set()
     for raw in ids:
@@ -878,7 +902,13 @@ def get_chunks(ids):
         f"FROM chunks WHERE id IN ({','.join('?' * len(wanted))})", wanted
     ).fetchall()
     con.close()
+    allow = {str(c) for c in (corpora or []) if c}
+    deny = {str(c) for c in (exclude_corpora or []) if c}
     by_id = {r["id"]: dict(r) for r in rows}
+    if allow or deny:
+        by_id = {k: v for k, v in by_id.items()
+                 if (not allow or str(v.get("corpus")) in allow)
+                 and str(v.get("corpus")) not in deny}
     found = [by_id[i] for i in wanted if i in by_id]
     missing = [i for i in wanted if i not in by_id]
     return found, missing

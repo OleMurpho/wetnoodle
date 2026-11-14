@@ -13,6 +13,11 @@
 #
 #   ./scripts/register-mcp.sh                 # every profile found
 #   ./scripts/register-mcp.sh work personal   # only the ones named
+#   ./scripts/register-mcp.sh --scope         # each profile may read its own corpus, skills, notes
+#   ./scripts/register-mcp.sh --allow a,b     # one explicit allowlist for every profile
+#
+# Every profile shares one store, so without a scope each agent can read every other
+# profile's transcripts. --scope is the fix: the wrapper env carries RAG_ALLOWED_CORPORA.
 #
 # Idempotent: re-running rewrites the wrapper and re-asserts the same values.
 set -uo pipefail
@@ -45,6 +50,17 @@ echo "  repo      : $ROOT"
 echo "  python    : $PY_BIN"
 echo "  hermes    : $HERMES_BIN"
 
+SCOPE=""
+ALLOW="${RAG_ALLOWED_CORPORA:-}"
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --scope) SCOPE=1; shift ;;
+        --allow) ALLOW="${2:-}"; shift 2 ;;
+        --allow=*) ALLOW="${1#*=}"; shift ;;
+        *) break ;;
+    esac
+done
+
 say "wrapper"
 mkdir -p "$(dirname "$WRAPPER")"
 cat >"$WRAPPER" <<WRAP
@@ -69,6 +85,7 @@ echo "  $(echo "$TARGETS" | tr '\n' ' ')"
 
 say "registering"
 for p in $TARGETS; do
+    note=""          # set -u: referenced below whether or not RAG_DIR was given
     if ! "$HERMES_BIN" -p "$p" config set mcp_servers.wetnoodle.command "$WRAPPER" >/dev/null 2>&1; then
         echo "  $p: FAILED (does this profile exist? try: hermes gateway list)"
         continue
@@ -77,6 +94,15 @@ for p in $TARGETS; do
     if [ -n "${RAG_DIR:-}" ]; then
         "$HERMES_BIN" -p "$p" config set mcp_servers.wetnoodle.env.RAG_DIR "$RAG_DIR" >/dev/null 2>&1
         note="store=$RAG_DIR"
+    fi
+    scope_value="$ALLOW"
+    if [ -z "$scope_value" ] && [ -n "$SCOPE" ]; then
+        scope_value="$p,skill,notes"
+    fi
+    if [ -n "$scope_value" ]; then
+        "$HERMES_BIN" -p "$p" config set mcp_servers.wetnoodle.env.RAG_ALLOWED_CORPORA \
+            "$scope_value" >/dev/null 2>&1 || echo "  $p: warning — could not set scope"
+        note="$note scope=$scope_value"
     else
         note="store=default"
     fi

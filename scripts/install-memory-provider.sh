@@ -80,6 +80,16 @@ for p in "${profiles[@]}"; do
     "$HERMES_BIN" -p "$p" config set memory.provider wetnoodle --force >/dev/null 2>&1 || cfg_ok=0
     "$HERMES_BIN" -p "$p" config set memory.wetnoodle.repo "$ROOT" --force >/dev/null 2>&1 || cfg_ok=0
     "$HERMES_BIN" -p "$p" config set memory.wetnoodle.db_dir "$DB_DIR" --force >/dev/null 2>&1 || cfg_ok=0
+    scope_value="${RAG_ALLOWED_CORPORA:-}"
+    if [ -z "$scope_value" ] && [ -n "${RAG_SCOPE:-}" ]; then
+        scope_value="$p,skill,notes"
+    fi
+    if [ -n "$scope_value" ]; then
+        # The provider reads its own corpora allowlist; without it, pre-turn recall for this
+        # profile searches every other profile's transcripts in the shared store.
+        "$HERMES_BIN" -p "$p" config set memory.wetnoodle.corpora "$scope_value" --force >/dev/null 2>&1 || cfg_ok=0
+        "$HERMES_BIN" -p "$p" config set memory.wetnoodle.exclude_corpora "" --force >/dev/null 2>&1 || cfg_ok=0
+    fi
     if [ "$cfg_ok" -eq 1 ]; then
         echo "  $p: linked, provider=wetnoodle, store=$DB_DIR"
     else

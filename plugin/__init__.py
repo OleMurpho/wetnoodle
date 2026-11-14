@@ -219,16 +219,15 @@ class WetnoodleMemoryProvider(MemoryProvider):
     # ---------------------------------------------------------------- retrieval
     def _search(self, query: str) -> List[dict]:
         core = self._import_core()
-        hits = core.search(query, k=10)
         allow = [c.strip() for c in str(self._cfg["corpora"]).split(",") if c.strip()]
-        deny = {c.strip() for c in str(self._cfg["exclude_corpora"]).split(",") if c.strip()}
+        deny = [c.strip() for c in str(self._cfg["exclude_corpora"]).split(",") if c.strip()]
+        # Scope inside the search, not after it. Filtering the returned list meant the ten hits
+        # were drawn from every profile and then discarded, so a profile whose allowance was
+        # narrow got fewer results than it asked for — sometimes none, while its own history
+        # sat one rank below the cut.
+        hits = core.search(query, k=10, corpora=allow, exclude_corpora=deny)
         out = []
         for h in hits:
-            corpus = h.get("corpus", "")
-            if allow and corpus not in allow:
-                continue
-            if corpus in deny:
-                continue
             if h.get("superseded_by"):
                 continue
             out.append(h)

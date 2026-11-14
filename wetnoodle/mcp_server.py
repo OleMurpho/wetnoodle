@@ -36,6 +36,17 @@ mcp = FastMCP("wetnoodle")
 SNIPPET = max(120, int(os.environ.get("RAG_SNIPPET_CHARS", "320")))
 
 
+def _scope():
+    """Corpora this server may read, from the environment.
+
+    The store is shared by every profile on the machine, so the MCP boundary is where "this
+    agent may not read another profile's transcripts" has to be enforced. Empty means
+    unrestricted, which is what a single-profile install wants.
+    """
+    split = lambda name: [c.strip() for c in os.environ.get(name, "").split(",") if c.strip()]
+    return split("RAG_ALLOWED_CORPORA"), split("RAG_EXCLUDED_CORPORA")
+
+
 @mcp.tool()
 def rag_search(query: str, pool: int = 12, corpus: str = "") -> str:
     """Search the memory archive and get a POOL OF CANDIDATES — not an answer, and not a ranking to trust.
@@ -53,8 +64,10 @@ def rag_search(query: str, pool: int = 12, corpus: str = "") -> str:
     """
     try:
         size = 12 if pool is None else int(pool)
+        allow, deny = _scope()
         hits = core.search(
-            query, k=max(1, min(size, 25)), corpus=(corpus or "").strip() or None
+            query, k=max(1, min(size, 25)), corpus=(corpus or "").strip() or None,
+            corpora=allow, exclude_corpora=deny,
         )
     except (ValueError, TypeError) as e:
         # A bad query and a bad pool both raise ValueError; do not blame the pool for both.
@@ -99,8 +112,9 @@ def rag_open(refs: list[str], max_chars: int = 0) -> str:
         budget = int(max_chars or 0)
     except (ValueError, TypeError):
         return f"rag_open error: max_chars must be a whole number; got {max_chars!r}"
+    allow, deny = _scope()
     try:
-        hits, missing = core.get_chunks(refs)
+        hits, missing = core.get_chunks(refs, corpora=allow, exclude_corpora=deny)
     except sqlite3.Error as e:
         return (f"rag_open unavailable: no index at {core.RAG_DB} ({e}). Run ingest.py first, "
                 f"or point RAG_DIR at a store that exists.")
@@ -131,7 +145,19 @@ def rag_audit() -> str:
     source database, sizes, schema version, and Ollama reachability. Corpora whose source db was deleted
     show as frozen."""
     try:
-        return json.dumps(core.audit(), indent=1)
+        report = core.audit()
+        allow, deny = _scope()
+        if allow or deny:
+            # Naming a corpus this caller may not read is a disclosure even without its contents.
+            keep = lambda name: (not allow or name in allow) and name not in deny
+            counts = report.get("corpora")
+            if isinstance(counts, dict):
+                report["corpora"] = {k: v for k, v in counts.items() if keep(k)}
+            elif isinstance(counts, list):
+                report["corpora"] = [c for c in counts
+                                     if keep(c.get("corpus") if isinstance(c, dict) else c)]
+            report["scope"] = {"allowed": allow, "excluded": deny}
+        return json.dumps(report, indent=1)
     except sqlite3.Error as e:
         return (f'{{"error": "no index at {core.RAG_DB}: {e}", "hint": "run ingest.py, or point RAG_DIR '
                 f'at a store that exists"}}')
