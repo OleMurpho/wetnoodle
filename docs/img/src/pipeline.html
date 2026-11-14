@@ -1,0 +1,72 @@
+<!doctype html><meta charset="utf-8">
+<link rel="stylesheet" href="fonts.css">
+<style>
+:root{--paper:#fbfaf7;--panel:#fff;--ink:#1f2933;--slate:#7b8794;--rule:#e4e7eb;
+      --steel:#4a6fa5;--brick:#a4442f;--warm:#fdf3c8;}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--paper);overflow:hidden;height:100%}
+body{font-family:'Inter',system-ui,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+.page{position:relative;overflow:hidden;background:
+   radial-gradient(1200px 600px at 20% -20%, #ffffff 0%, #fbfaf7 60%),
+   radial-gradient(900px 500px at 100% 120%, #f2f7f4 0%, #fbfaf7 55%);}
+.mono{font-family:'JetBrains Mono',monospace}
+.rule{height:1px;background:var(--rule)}
+
+.page{width:1600px;height:760px}
+.head{position:absolute;top:64px;left:112px}
+h2{font-size:40px;font-weight:650;letter-spacing:-.02em;margin-top:10px}
+.k{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--steel);letter-spacing:.16em}
+.sub{font-size:18px;color:#4a5560;margin-top:12px;max-width:900px}
+</style>
+<div class="page">
+ <div class="head">
+   <div class="k">HOW IT WORKS</div>
+   <h2>From a conversation to a passage, and back again.</h2>
+   <div class="sub">Nothing is sent anywhere. Sources are read in place, embedded locally, and served over MCP.</div>
+ </div>
+ <svg style="position:absolute;left:0;top:250px" width="1600" height="470" viewBox="0 0 1600 470">
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" fill="#7b8794"/></marker>
+  </defs>
+
+  <!-- sources -->
+  <rect x="96" y="40" width="300" height="96" rx="10" fill="#fff" stroke="#e4e7eb"/>
+  <text x="120" y="78" font-family="Inter" font-size="19" font-weight="600" fill="#1f2933">session databases</text>
+  <text x="120" y="104" font-family="JetBrains Mono" font-size="13" fill="#7b8794">one per profile</text>
+
+  <rect x="96" y="152" width="300" height="96" rx="10" fill="#fff" stroke="#e4e7eb"/>
+  <text x="120" y="190" font-family="Inter" font-size="19" font-weight="600" fill="#1f2933">your SKILL.md files</text>
+  <text x="120" y="216" font-family="JetBrains Mono" font-size="13" fill="#7b8794">procedures you wrote once</text>
+
+  <!-- ingest -->
+  <rect x="516" y="96" width="290" height="96" rx="10" fill="#fff" stroke="#e4e7eb"/>
+  <text x="540" y="134" font-family="Inter" font-size="19" font-weight="600" fill="#1f2933">ingest</text>
+  <text x="540" y="160" font-family="JetBrains Mono" font-size="13" fill="#7b8794">chunk → embed → commit</text>
+  <path d="M400 88 L508 120" stroke="#7b8794" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+  <path d="M400 200 L508 168" stroke="#7b8794" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+
+  <!-- store -->
+  <rect x="906" y="96" width="240" height="96" rx="10" fill="#fdf3c8" stroke="#e9dca0"/>
+  <text x="930" y="134" font-family="Inter" font-size="19" font-weight="600" fill="#1f2933">rag.db</text>
+  <text x="930" y="160" font-family="JetBrains Mono" font-size="13" fill="#8a6d1c">vectors + text</text>
+  <path d="M810 144 L898 144" stroke="#7b8794" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+
+  <!-- tools -->
+  <rect x="1246" y="88" width="258" height="112" rx="10" fill="#fff" stroke="#4a6fa5" stroke-width="1.6"/>
+  <text x="1270" y="122" font-family="Inter" font-size="19" font-weight="600" fill="#1f2933">three tools</text>
+  <text x="1270" y="148" font-family="JetBrains Mono" font-size="13" fill="#4a6fa5">rag_search</text>
+  <text x="1270" y="170" font-family="JetBrains Mono" font-size="13" fill="#4a6fa5">rag_open</text>
+  <text x="1270" y="192" font-family="JetBrains Mono" font-size="13" fill="#4a6fa5">rag_audit</text>
+  <path d="M1150 144 L1238 144" stroke="#7b8794" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+
+  <!-- the model -->
+  <rect x="516" y="286" width="988" height="118" rx="10" fill="#fff" stroke="#e4e7eb"/>
+  <text x="546" y="330" font-family="Inter" font-size="20" font-weight="600" fill="#1f2933">the model in the turn</text>
+  <text x="546" y="360" font-family="Inter" font-size="16" fill="#4a5560">reads the pool, opens the two or three that answer, and answers — or says it could not find it.</text>
+  <text x="546" y="384" font-family="JetBrains Mono" font-size="13" fill="#a4442f">no reranker · no judge endpoint · no second model</text>
+  <path d="M1375 208 L1375 246 L1030 246 L1030 278" stroke="#7b8794" stroke-width="1.6" fill="none"
+        marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <text x="1044" y="240" font-family="JetBrains Mono" font-size="12" fill="#7b8794">MCP · the model calls the tools</text>
+ </svg>
+</div>

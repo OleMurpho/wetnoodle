@@ -1,0 +1,67 @@
+<!doctype html><meta charset="utf-8">
+<link rel="stylesheet" href="fonts.css">
+<style>
+:root{--paper:#fbfaf7;--panel:#fff;--ink:#1f2933;--slate:#7b8794;--rule:#e4e7eb;
+      --steel:#4a6fa5;--brick:#a4442f;--warm:#fdf3c8;}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--paper);overflow:hidden;height:100%}
+body{font-family:'Inter',system-ui,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+.page{position:relative;overflow:hidden;background:
+   radial-gradient(1200px 600px at 20% -20%, #ffffff 0%, #fbfaf7 60%),
+   radial-gradient(900px 500px at 100% 120%, #f2f7f4 0%, #fbfaf7 55%);}
+.mono{font-family:'JetBrains Mono',monospace}
+.rule{height:1px;background:var(--rule)}
+
+.page{width:1600px;height:620px}
+.frame{position:absolute;inset:0;border:0}
+.left{position:absolute;left:112px;top:112px;width:820px}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--slate);letter-spacing:.16em}
+h1{font-size:116px;font-weight:700;letter-spacing:-.045em;line-height:.96;margin-top:26px}
+.sub{font-size:27px;color:#3d4249;margin-top:26px;line-height:1.45;max-width:700px}
+.sub b{font-weight:600;color:var(--ink)}
+.badges{margin-top:34px;display:flex;gap:10px}
+.b{font-family:'JetBrains Mono',monospace;font-size:13.5px;color:#3d4249;background:#fff;
+   border:1px solid var(--rule);border-radius:6px;padding:8px 13px}
+.b.hi{background:var(--warm);border-color:#e9dca0;color:#6b5312}
+.hr{position:absolute;left:112px;bottom:96px;width:640px;height:1px;background:var(--rule)}
+.foot{position:absolute;left:112px;bottom:58px;font-family:'JetBrains Mono',monospace;
+       font-size:13px;color:var(--slate);letter-spacing:.1em}
+/* candidate stack */
+.stack{position:absolute;right:104px;top:126px;width:520px}
+.card{position:relative;height:40px;border:1px solid var(--rule);border-radius:8px;background:#fff;
+      margin-bottom:13px;box-shadow:0 1px 2px rgba(31,41,51,.04)}
+.card:before{content:'';position:absolute;left:16px;top:15px;height:9px;border-radius:3px;background:#eef0f2}
+.card.a:before{width:300px} .card.b:before{width:250px} .card.c:before{width:330px}
+.card.d:before{width:210px} .card.e:before{width:280px} .card.f:before{width:190px}
+.card.on{background:var(--warm);border:2px solid var(--steel);box-shadow:0 3px 10px rgba(74,111,165,.16)}
+.card.on:before{background:#d9c98a}
+.card.on:after{content:'rank 3 of 8';position:absolute;right:14px;top:10px;font-family:'JetBrains Mono',monospace;
+   font-size:11.5px;color:var(--steel);letter-spacing:.06em}
+.pool{margin-top:12px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--slate);
+      display:flex;justify-content:space-between}
+</style>
+<div class="page">
+  <div class="left">
+    <div class="eyebrow">a local memory archive for hermes agent</div>
+    <h1>wetnoodle</h1>
+    <div class="sub">Your agent forgets when the context closes. This is the archive beside it:
+      <b>one SQLite file</b>, a <b>local embedding model</b>, and three tools.</div>
+    <div class="badges">
+      <div class="b hi">memory you can check</div>
+      <div class="b">no cloud</div>
+      <div class="b">no API keys</div>
+      <div class="b">nomic-embed-text</div>
+    </div>
+  </div>
+  <div class="stack">
+    <div class="card a"></div>
+    <div class="card b"></div>
+    <div class="card c on"></div>
+    <div class="card d"></div>
+    <div class="card e"></div>
+    <div class="card f"></div>
+    <div class="pool"><span>a pool of candidates</span><span>the model chooses</span></div>
+  </div>
+  <div class="hr"></div>
+  <div class="foot">rag_search · rag_open · rag_audit &nbsp;&nbsp;/&nbsp;&nbsp; everything stays on your machine</div>
+</div>

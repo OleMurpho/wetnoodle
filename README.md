@@ -1,3 +1,5 @@
+![](docs/img/hero.png)
+
 # wetnoodle
 
 A local memory archive for [Hermes Agent](https://hermes-agent.nousresearch.com/docs). It indexes every
@@ -6,13 +8,7 @@ answer *"what did we decide about X three weeks ago"* instead of only seeing wha
 window. Everything stays on your machine: a SQLite file and a local Ollama embedding model. No API keys, no
 cloud store, nothing to sign up for.
 
-```
-you ──▶ Hermes sessions (per profile, per SQLite db) ──┐
-                                                       ├─▶ wetnoodle ingest ──▶ rag.db (vectors + text)
-you ──▶ skills (*/SKILL.md) ───────────────────────────┘                              │
-                                                                                      ▼
-                                             agent (MCP tool) / query.py ◀── search ───┘
-```
+![](docs/img/pipeline.png)
 
 ## Credit where it's due
 
