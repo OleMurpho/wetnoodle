@@ -30,7 +30,11 @@ say() { printf '\n== %s\n' "$1"; }
 die() { echo "error: $*" >&2; exit 1; }
 
 say "preflight"
-command -v hermes >/dev/null || die "hermes is not on PATH — this step wires into an existing Hermes install"
+HERMES_BIN="${HERMES_BIN:-$(command -v hermes || true)}"
+if [ -z "$HERMES_BIN" ] && [ -x "$HOME/.local/bin/hermes" ]; then
+    HERMES_BIN="$HOME/.local/bin/hermes"
+fi
+[ -n "$HERMES_BIN" ] || die "hermes not found — put it on PATH or set HERMES_BIN"
 [ -f "$ROOT/wetnoodle/mcp_server.py" ] || die "wetnoodle/mcp_server.py not found in $ROOT — run this from the repo"
 # RAG_PYTHON lets an orchestrating distribution point at a venv it manages
 # elsewhere (bootstrap.sh uses the same knob to choose the base interpreter).
@@ -39,7 +43,7 @@ PY_BIN="${RAG_PYTHON:-$ROOT/.venv/bin/python}"
 [ -x "$PY_BIN" ] || die "no interpreter at $PY_BIN — run ./scripts/bootstrap.sh, or set RAG_PYTHON"
 echo "  repo      : $ROOT"
 echo "  python    : $PY_BIN"
-echo "  hermes    : $(command -v hermes)"
+echo "  hermes    : $HERMES_BIN"
 
 say "wrapper"
 mkdir -p "$(dirname "$WRAPPER")"
@@ -63,13 +67,13 @@ echo "  $(echo "$TARGETS" | tr '\n' ' ')"
 
 say "registering"
 for p in $TARGETS; do
-    if ! hermes -p "$p" config set mcp_servers.wetnoodle.command "$WRAPPER" >/dev/null 2>&1; then
+    if ! "$HERMES_BIN" -p "$p" config set mcp_servers.wetnoodle.command "$WRAPPER" >/dev/null 2>&1; then
         echo "  $p: FAILED (does this profile exist? try: hermes gateway list)"
         continue
     fi
-    hermes -p "$p" config set mcp_servers.wetnoodle.enabled true >/dev/null 2>&1
+    "$HERMES_BIN" -p "$p" config set mcp_servers.wetnoodle.enabled true >/dev/null 2>&1
     if [ -n "${RAG_DIR:-}" ]; then
-        hermes -p "$p" config set mcp_servers.wetnoodle.env.RAG_DIR "$RAG_DIR" >/dev/null 2>&1
+        "$HERMES_BIN" -p "$p" config set mcp_servers.wetnoodle.env.RAG_DIR "$RAG_DIR" >/dev/null 2>&1
         note="store=$RAG_DIR"
     else
         note="store=default"

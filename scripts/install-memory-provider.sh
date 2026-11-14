@@ -25,6 +25,12 @@ DB_DIR="${RAG_DIR:-$HOME/.wetnoodle}"
 
 die() { echo "install-memory-provider: $*" >&2; exit 1; }
 
+HERMES_BIN="${HERMES_BIN:-$(command -v hermes || true)}"
+if [ -z "$HERMES_BIN" ] && [ -x "$HOME/.local/bin/hermes" ]; then
+    HERMES_BIN="$HOME/.local/bin/hermes"
+fi
+[ -n "$HERMES_BIN" ] || die "hermes not found — put it on PATH or set HERMES_BIN"
+
 REMOVE=0
 [ "${1:-}" = "--remove" ] && { REMOVE=1; shift; }
 
@@ -68,10 +74,17 @@ for p in "${profiles[@]}"; do
 
     # The provider reads these; without them it falls back to ~/.wetnoodle, which is
     # a different (usually smaller) archive than the one the MCP tools serve.
-    hermes -p "$p" config set memory.provider wetnoodle --force >/dev/null 2>&1 || true
-    hermes -p "$p" config set memory.wetnoodle.repo "$ROOT" --force >/dev/null 2>&1 || true
-    hermes -p "$p" config set memory.wetnoodle.db_dir "$DB_DIR" --force >/dev/null 2>&1 || true
-    echo "  $p: linked, provider=wetnoodle, store=$DB_DIR"
+    # Do not swallow this: a linked plugin with no provider key looks installed and
+    # does nothing, which is the failure mode this script exists to prevent.
+    cfg_ok=1
+    "$HERMES_BIN" -p "$p" config set memory.provider wetnoodle --force >/dev/null 2>&1 || cfg_ok=0
+    "$HERMES_BIN" -p "$p" config set memory.wetnoodle.repo "$ROOT" --force >/dev/null 2>&1 || cfg_ok=0
+    "$HERMES_BIN" -p "$p" config set memory.wetnoodle.db_dir "$DB_DIR" --force >/dev/null 2>&1 || cfg_ok=0
+    if [ "$cfg_ok" -eq 1 ]; then
+        echo "  $p: linked, provider=wetnoodle, store=$DB_DIR"
+    else
+        echo "  $p: linked, but the config keys were NOT set — run 'hermes -p $p memory status'"
+    fi
 done
 
 echo
