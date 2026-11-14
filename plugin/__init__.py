@@ -95,13 +95,34 @@ class WetnoodleMemoryProvider(MemoryProvider):
         repo = _core_file(Path(self._cfg["repo"]))
         if not (db.exists() and repo.exists()):
             self._reason = f"missing db or repo ({db}, {repo})"
+            self._note(self._reason)
             return False
         try:
             self._import_core()
+            self._note("available")
             return True
         except Exception as e:  # pragma: no cover - environment dependent
             self._reason = f"rag_core import failed: {e}"
+            self._note(self._reason)
             return False
+
+    def _note(self, message: str) -> None:
+        """Append this check's verdict to $WETNOODLE_AVAIL_LOG, when set.
+
+        `hermes memory status` and `doctor` both print 'not available' without the
+        reason, which leaves a remote install with nothing to go on. Set the variable
+        to a path and the real cause lands there.
+        """
+        path = os.environ.get("WETNOODLE_AVAIL_LOG")
+        if not path:
+            return
+        try:
+            with open(path, "a", encoding="utf-8") as fh:
+                fh.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} pid={os.getpid()} "
+                         f"module={__name__} db={self._cfg['db_dir']} repo={self._cfg['repo']} "
+                         f"-> {message}\n")
+        except OSError:
+            pass
 
     def unavailable_reason(self) -> str:
         return getattr(self, "_reason", "")
