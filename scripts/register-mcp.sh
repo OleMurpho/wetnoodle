@@ -131,10 +131,10 @@ for p in $TARGETS; do
         "$HERMES_BIN" -p "$p" config set mcp_servers.wetnoodle.env.RAG_ALLOWED_CORPORA \
             "$scope_value" >/dev/null 2>&1 || echo "  $p: warning — could not set scope"
         note="$note scope=$scope_value"
-    else
-        note="store=default"
     fi
-    printf '  %-16s registered (%s)\n' "$p" "$note"
+    # `note` already carries the store when RAG_DIR was exported; the old `else` replaced it
+    # with the word "default", which read as if the wrong store had been configured.
+    printf '  %-16s registered (%s)\n' "$p" "${note:-defaults}"
 done
 
 cat <<'DONE'
