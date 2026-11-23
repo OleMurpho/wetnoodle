@@ -1040,6 +1040,11 @@ def get_chunks(ids, corpora=None, exclude_corpora=None):
     return found, missing
 
 
+# Corpora that are computed from the archive rather than ingested from a source database.
+# They have no source db to be "missing", and --purge-missing must never delete them.
+DERIVED_CORPORA = {"curated"}
+
+
 def audit():
     """Index health report: per-corpus coverage + freshness, sizes, ollama."""
     con = sqlite3.connect(f"file:{RAG_DB}?mode=ro", uri=True)
@@ -1065,6 +1070,12 @@ def audit():
     for key in sorted(set(sources) | set(per)):
         desc = sources.get(key)
         entry = dict(per.get(key, {"chunks": 0, "max_msg_end": 0, "latest_ts": 0}))
+        if key in DERIVED_CORPORA:
+            # Generated from the archive (see wetnoodle.curate): no source db, never frozen.
+            entry.update(kind="derived", path=None, watermark=0,
+                         available=True, fresh=None)
+            corpora[key] = entry
+            continue
         entry["kind"] = (desc or {}).get("kind", "missing")
         entry["path"] = source_label(key, desc or {}) if desc else None
         entry["watermark"] = get_watermark(key)

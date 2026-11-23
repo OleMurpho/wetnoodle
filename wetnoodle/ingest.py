@@ -55,7 +55,8 @@ def run(full=False, only=None, purge_missing=False):
     sessions = {k: v for k, v in sources.items() if v["kind"] == "sessions"}
     frozen = sorted(
         k for k, v in (core.audit().get("corpora") or {}).items()
-        if v.get("chunks") and not v.get("available") and k != "skill"
+        if v.get("chunks") and not v.get("available")
+        and k not in core.DERIVED_CORPORA and k != "skill"
     )
 
     if purge_missing and frozen:
