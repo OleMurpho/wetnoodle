@@ -107,6 +107,9 @@ else
 fi
 
 if [ "$rc" -eq 0 ]; then
+    # Refresh the project facts. Deterministic, skips anything unchanged, and never fails
+    # the ingest: a missing curated row costs recall quality, not the index itself.
+    "$RAG_PYTHON" -E -s -m wetnoodle.curate >/dev/null 2>&1 || true
     mkdir -p "$RAG_DIR" 2>/dev/null
     date +%s >"$STATE" 2>/dev/null
 fi
